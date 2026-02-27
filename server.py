@@ -71,6 +71,11 @@ async def lifespan(app: FastAPI):
     stale = await db.clean_stale_syncs()
     if stale:
         print(f"Cleaned {stale} stale sync(s) from previous run")
+    list_used, get_used = await db.estimate_api_calls_last_hour()
+    if list_used or get_used:
+        client._list_bucket.seed_usage(list_used)
+        client._get_bucket.seed_usage(get_used)
+        print(f"Seeded rate limits from recent syncs: list={list_used}, get={get_used}")
     yield
     await client.close()
 
@@ -591,7 +596,7 @@ async def stats_replays(
 @app.get("/api/stats/scoreline")
 async def stats_scoreline(
     team_size: int | None = Query(None, alias="team-size"),
-    exclude_zero_zero: bool = Query(False, alias="exclude-zero-zero"),
+    exclude_ties: bool = Query(False, alias="exclude-ties"),
     min_duration: int = Query(0, alias="min-duration"),
     playlists: list[str] = Query([], alias="playlist"),
 ) -> list[ScorelineRow]:
@@ -630,7 +635,7 @@ async def stats_scoreline(
         my_goals = _safe_get(replay, my_team, "stats", "core", "goals", default=0)
         opp_goals = _safe_get(replay, opp_color, "stats", "core", "goals", default=0)
 
-        if exclude_zero_zero and my_goals == 0 and opp_goals == 0:
+        if exclude_ties and my_goals == opp_goals:
             continue
 
         key = (my_goals, opp_goals)
@@ -707,7 +712,7 @@ async def stats_scoreline(
 @app.get("/api/stats/games")
 async def stats_games(
     team_size: int | None = Query(None, alias="team-size"),
-    exclude_zero_zero: bool = Query(False, alias="exclude-zero-zero"),
+    exclude_ties: bool = Query(False, alias="exclude-ties"),
     min_duration: int = Query(0, alias="min-duration"),
     playlists: list[str] = Query([], alias="playlist"),
 ) -> list[GameAnalysisRow]:
@@ -743,7 +748,7 @@ async def stats_games(
         my_goals = _safe_get(replay, my_team, "stats", "core", "goals", default=0)
         opp_goals = _safe_get(replay, opp_color, "stats", "core", "goals", default=0)
 
-        if exclude_zero_zero and my_goals == 0 and opp_goals == 0:
+        if exclude_ties and my_goals == opp_goals:
             continue
 
         me_stats = None
@@ -899,7 +904,7 @@ async def stats_correlation(
     stat: str = Query(..., alias="stat"),
     role: str = Query("me", alias="role"),
     team_size: int | None = Query(None, alias="team-size"),
-    exclude_zero_zero: bool = Query(False, alias="exclude-zero-zero"),
+    exclude_ties: bool = Query(False, alias="exclude-ties"),
     min_duration: int = Query(0, alias="min-duration"),
     playlists: list[str] = Query([], alias="playlist"),
 ) -> CorrelationResponse:
@@ -936,7 +941,7 @@ async def stats_correlation(
 
         my_goals = _safe_get(replay, my_team, "stats", "core", "goals", default=0)
         opp_goals = _safe_get(replay, opp_color, "stats", "core", "goals", default=0)
-        if exclude_zero_zero and my_goals == 0 and opp_goals == 0:
+        if exclude_ties and my_goals == opp_goals:
             continue
 
         # Extract stat values per role

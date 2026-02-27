@@ -315,7 +315,7 @@ export function getStatsReplays(params: StatsReplayParams = {}) {
 
 export interface AnalysisFilterParams {
   teamSize?: number;
-  excludeZeroZero?: boolean;
+  excludeTies?: boolean;
   minDuration?: number;
   playlists?: string[];
 }
@@ -323,7 +323,7 @@ export interface AnalysisFilterParams {
 export function getScorelineStats(params: AnalysisFilterParams = {}) {
   const q = new URLSearchParams();
   if (params.teamSize != null) q.set('team-size', String(params.teamSize));
-  if (params.excludeZeroZero) q.set('exclude-zero-zero', 'true');
+  if (params.excludeTies) q.set('exclude-ties', 'true');
   if (params.minDuration) q.set('min-duration', String(params.minDuration));
   if (params.playlists) for (const p of params.playlists) q.append('playlist', p);
   const qs = q.toString();
@@ -333,7 +333,7 @@ export function getScorelineStats(params: AnalysisFilterParams = {}) {
 export function getGameAnalysis(params: AnalysisFilterParams = {}) {
   const q = new URLSearchParams();
   if (params.teamSize != null) q.set('team-size', String(params.teamSize));
-  if (params.excludeZeroZero) q.set('exclude-zero-zero', 'true');
+  if (params.excludeTies) q.set('exclude-ties', 'true');
   if (params.minDuration) q.set('min-duration', String(params.minDuration));
   if (params.playlists) for (const p of params.playlists) q.append('playlist', p);
   const qs = q.toString();
@@ -384,7 +384,7 @@ export function getCorrelationStats(params: CorrelationParams) {
   q.set('stat', params.stat);
   if (params.role) q.set('role', params.role);
   if (params.teamSize != null) q.set('team-size', String(params.teamSize));
-  if (params.excludeZeroZero) q.set('exclude-zero-zero', 'true');
+  if (params.excludeTies) q.set('exclude-ties', 'true');
   if (params.minDuration) q.set('min-duration', String(params.minDuration));
   if (params.playlists) for (const p of params.playlists) q.append('playlist', p);
   const qs = q.toString();
