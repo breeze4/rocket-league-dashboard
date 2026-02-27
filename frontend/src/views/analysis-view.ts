@@ -3,8 +3,9 @@ import { customElement, state } from 'lit/decorators.js';
 
 import './scoreline-view.js';
 import './game-analysis-view.js';
+import './correlation-view.js';
 
-type SubView = 'scoreline' | 'games';
+type SubView = 'scoreline' | 'games' | 'correlation';
 
 @customElement('analysis-view')
 export class AnalysisView extends LitElement {
@@ -50,10 +51,14 @@ export class AnalysisView extends LitElement {
                 @click=${() => this._subView = 'scoreline'}>Per Scoreline</button>
         <button class="${this._subView === 'games' ? 'active' : ''}"
                 @click=${() => this._subView = 'games'}>Per Game</button>
+        <button class="${this._subView === 'correlation' ? 'active' : ''}"
+                @click=${() => this._subView = 'correlation'}>Correlations</button>
       </div>
       ${this._subView === 'scoreline'
         ? html`<scoreline-view></scoreline-view>`
-        : html`<game-analysis-view></game-analysis-view>`}
+        : this._subView === 'games'
+        ? html`<game-analysis-view></game-analysis-view>`
+        : html`<correlation-view></correlation-view>`}
     `;
   }
 }
