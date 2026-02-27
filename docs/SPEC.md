@@ -58,6 +58,8 @@ The Analysis tab has two sub-views, toggled via a secondary nav within the tab:
 
 **Per Scoreline** — The existing scoreline aggregation view. Groups replays by final score and averages positioning/speed stats per role. Scoreline rows are clickable — clicking expands the row to show individual games with that exact scoreline inline, rendered with the same bar-chart format as the Per Game view. Multiple rows can be expanded simultaneously. Game data is fetched alongside scoreline data so expansion is instant. Sub-rows are sorted by date descending. Expansion state resets when filters or team size change.
 
+**Win/Loss** — Groups games by goal differential (my_goals - opp_goals). Each row is a margin bucket (e.g. +3, +2, +1, 0, -1, -2) with averaged positioning/speed stats per role. Denser than Per Scoreline because 4-2 and 5-3 both go into "+2". Expandable rows show individual games within each bucket. Sorted by margin descending (biggest wins first) by default. Uses the same `getGameAnalysis` data as Per Game — aggregation is done client-side, no additional backend endpoint.
+
 **Per Game** — Individual game stats shown chronologically (most recent first). Each row is a single replay with the same three bar-chart stats (% Behind Ball, Avg Speed, Avg Distance) broken down by Me/Tm/Op. Columns: Date, Score, plus the three stat bar columns. Sortable by date, score, or any stat column. Uses the same team-size filter.
 
 Both views share styling, bar rendering, color ranking, and sort logic via shared utilities to keep code DRY.
@@ -142,6 +144,7 @@ Custom History API router (no library). The dev server uses `historyApiFallback`
 /stats                → stats view
 /analysis             → redirect to /analysis/scoreline
 /analysis/scoreline   → per-scoreline analysis
+/analysis/goal-diff   → win/loss by goal differential
 /analysis/games       → per-game analysis
 /analysis/correlation → correlation analysis
 /replays              → replays list

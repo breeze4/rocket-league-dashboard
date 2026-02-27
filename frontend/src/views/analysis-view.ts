@@ -3,12 +3,13 @@ import { customElement, property } from 'lit/decorators.js';
 import { navigate } from '../lib/router.js';
 
 import './scoreline-view.js';
+import './goal-diff-view.js';
 import './game-analysis-view.js';
 import './correlation-view.js';
 
-type SubView = 'scoreline' | 'games' | 'correlation';
+type SubView = 'scoreline' | 'goal-diff' | 'games' | 'correlation';
 
-const VALID_SUBS: SubView[] = ['scoreline', 'games', 'correlation'];
+const VALID_SUBS: SubView[] = ['scoreline', 'goal-diff', 'games', 'correlation'];
 
 @customElement('analysis-view')
 export class AnalysisView extends LitElement {
@@ -82,6 +83,8 @@ export class AnalysisView extends LitElement {
       <div class="sub-nav">
         <button class="${view === 'scoreline' ? 'active' : ''}"
                 @click=${() => this._navigate('scoreline')}>Per Scoreline</button>
+        <button class="${view === 'goal-diff' ? 'active' : ''}"
+                @click=${() => this._navigate('goal-diff')}>Win/Loss</button>
         <button class="${view === 'games' ? 'active' : ''}"
                 @click=${() => this._navigate('games')}>Per Game</button>
         <button class="${view === 'correlation' ? 'active' : ''}"
@@ -89,6 +92,8 @@ export class AnalysisView extends LitElement {
       </div>
       ${view === 'scoreline'
         ? html`<scoreline-view></scoreline-view>`
+        : view === 'goal-diff'
+        ? html`<goal-diff-view></goal-diff-view>`
         : view === 'games'
         ? html`<game-analysis-view></game-analysis-view>`
         : html`<correlation-view></correlation-view>`}
