@@ -29,6 +29,8 @@ from models import (
 
 load_dotenv()
 
+UPLOADER_ID = "76561197971332940"
+
 client: BallchasingClient
 sync_status = SyncStatus(running=False)
 
@@ -64,11 +66,24 @@ async def ping():
 # --- Sync ---
 
 
+@app.get("/api/sync/preview")
+async def sync_preview(
+    replay_date_after: str | None = Query(None, alias="replay-date-after"),
+    replay_date_before: str | None = Query(None, alias="replay-date-before"),
+):
+    params: dict = {"count": 1, "uploader": UPLOADER_ID}
+    if replay_date_after:
+        params["replay-date-after"] = replay_date_after if "T" in replay_date_after else replay_date_after + "T00:00:00Z"
+    if replay_date_before:
+        params["replay-date-before"] = replay_date_before if "T" in replay_date_before else replay_date_before + "T23:59:59Z"
+    page = await client.list_replays(**params)
+    return {"total": page.get("count", 0)}
+
+
 @app.post("/api/sync")
 async def sync_replays(
     replay_date_after: str | None = Query(None, alias="replay-date-after"),
     replay_date_before: str | None = Query(None, alias="replay-date-before"),
-    uploader: str | None = Query(None),
 ):
     global sync_status
     if sync_status.running:
@@ -79,13 +94,20 @@ async def sync_replays(
         return {"message": "Already synced", "covered_by": covering}
 
     sync_status = SyncStatus(running=True)
-    asyncio.create_task(_do_sync(replay_date_after, replay_date_before, uploader))
+    asyncio.create_task(_do_sync(replay_date_after, replay_date_before))
     return {"message": "Sync started"}
 
 
 @app.get("/api/sync/status")
 async def get_sync_status():
     return sync_status
+
+
+@app.get("/api/sync/coverage")
+async def get_sync_coverage():
+    replay_counts = await db.get_replay_date_counts()
+    synced_ranges = await db.get_synced_ranges()
+    return {"replay_counts": replay_counts, "synced_ranges": synced_ranges}
 
 
 @app.get("/api/sync/history")
@@ -99,18 +121,15 @@ async def get_sync_history(
 async def _do_sync(
     date_after: str | None,
     date_before: str | None,
-    uploader: str | None,
 ) -> None:
     global sync_status
     log_id = await db.create_sync_log(date_after, date_before)
     try:
-        params: dict = {"count": 200, "sort-by": "replay-date", "sort-dir": "desc"}
+        params: dict = {"count": 200, "sort-by": "replay-date", "sort-dir": "desc", "uploader": UPLOADER_ID}
         if date_after:
-            params["replay-date-after"] = date_after
+            params["replay-date-after"] = date_after if "T" in date_after else date_after + "T00:00:00Z"
         if date_before:
-            params["replay-date-before"] = date_before
-        if uploader:
-            params["uploader"] = uploader
+            params["replay-date-before"] = date_before if "T" in date_before else date_before + "T23:59:59Z"
 
         next_url: str | None = None
         first_page = True

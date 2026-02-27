@@ -160,6 +160,14 @@ export interface SyncParams {
   replayDateBefore?: string;
 }
 
+export function getSyncPreview(params: SyncParams = {}) {
+  const q = new URLSearchParams();
+  if (params.replayDateAfter) q.set('replay-date-after', params.replayDateAfter);
+  if (params.replayDateBefore) q.set('replay-date-before', params.replayDateBefore);
+  const qs = q.toString();
+  return get<{ total: number }>(`/api/sync/preview${qs ? '?' + qs : ''}`);
+}
+
 export function startSync(params: SyncParams = {}) {
   const q = new URLSearchParams();
   if (params.replayDateAfter) q.set('replay-date-after', params.replayDateAfter);
@@ -187,6 +195,15 @@ export interface SyncLogEntry {
 
 export function getSyncHistory(limit = 20) {
   return get<SyncLogEntry[]>(`/api/sync/history?limit=${limit}`);
+}
+
+export interface SyncCoverage {
+  replay_counts: Record<string, number>;
+  synced_ranges: { date_after: string | null; date_before: string | null }[];
+}
+
+export function getSyncCoverage() {
+  return get<SyncCoverage>('/api/sync/coverage');
 }
 
 export function getPlayers() {

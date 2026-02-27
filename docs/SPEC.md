@@ -19,6 +19,7 @@ Two-phase workflow:
 /api/sync                     -> POST: pull replays from ballchasing, cache in SQLite
 /api/sync/status              -> GET: sync progress
 /api/sync/history             -> GET: list recent sync log entries
+/api/sync/coverage            -> GET: replay counts per day + completed sync date ranges
 
 /api/players                  -> GET: list all players seen, sorted by frequency
 /api/players/config           -> GET/PUT: map player names to roles

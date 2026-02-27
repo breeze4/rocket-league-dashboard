@@ -188,6 +188,28 @@ async def get_sync_history(limit: int = 20) -> list[dict]:
         return [dict(row) for row in rows]
 
 
+async def get_replay_date_counts() -> dict[str, int]:
+    """Return replay counts per day as {YYYY-MM-DD: count}."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT substr(date, 1, 10) as day, COUNT(*) as count "
+            "FROM replays WHERE date IS NOT NULL GROUP BY day"
+        )
+        rows = await cursor.fetchall()
+        return {row[0]: row[1] for row in rows}
+
+
+async def get_synced_ranges() -> list[dict]:
+    """Return all completed sync date ranges."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT date_after, date_before FROM sync_log "
+            "WHERE status = 'completed' ORDER BY id"
+        )
+        rows = await cursor.fetchall()
+        return [{"date_after": row[0], "date_before": row[1]} for row in rows]
+
+
 async def find_covering_sync(
     date_after: str | None, date_before: str | None
 ) -> dict | None:

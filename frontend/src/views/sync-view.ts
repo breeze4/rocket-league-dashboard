@@ -1,6 +1,43 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { startSync, getSyncStatus, getSyncHistory, type SyncStatus, type SyncLogEntry } from '../lib/api.js';
+import {
+  startSync, getSyncPreview, getSyncStatus, getSyncHistory, getSyncCoverage,
+  type SyncStatus, type SyncLogEntry, type SyncCoverage,
+} from '../lib/api.js';
+
+/** Format YYYY-MM-DD from year/month/day numbers. */
+function fmtDate(y: number, m: number, d: number): string {
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/** Check if dateStr falls within any synced range. */
+function isCovered(dateStr: string, ranges: SyncCoverage['synced_ranges']): boolean {
+  for (const r of ranges) {
+    const afterOk = r.date_after === null || dateStr >= r.date_after;
+    const beforeOk = r.date_before === null || dateStr <= r.date_before;
+    if (afterOk && beforeOk) return true;
+  }
+  return false;
+}
+
+/** Return CSS background color for a day cell. */
+function dayCellColor(
+  dateStr: string,
+  replayCounts: Record<string, number>,
+  ranges: SyncCoverage['synced_ranges'],
+): string {
+  const count = replayCounts[dateStr];
+  if (count) {
+    // Green, intensity scales with count (min 0.3, max 0.9 opacity feel)
+    const intensity = Math.min(count / 15, 1);
+    const g = Math.round(100 + intensity * 120); // 100..220
+    return `rgb(30, ${g}, 60)`;
+  }
+  if (isCovered(dateStr, ranges)) {
+    return '#1e2d4a'; // dim blue tint
+  }
+  return ''; // default (inherit)
+}
 
 @customElement('sync-view')
 export class SyncView extends LitElement {
@@ -64,6 +101,118 @@ export class SyncView extends LitElement {
     .error { color: #ef5350; margin-top: 0.75rem; }
     .idle { color: #81c784; }
 
+    /* Calendar */
+    .calendar { margin-bottom: 1.5rem; }
+    .calendar h3 {
+      color: #aaa;
+      font-size: 0.95rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .calendar-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+    }
+
+    .month {
+      min-width: 200px;
+    }
+
+    .month-label {
+      font-size: 0.8rem;
+      color: #888;
+      margin-bottom: 0.35rem;
+      font-weight: 600;
+    }
+
+    .month-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+
+    .dow {
+      font-size: 0.65rem;
+      color: #666;
+      text-align: center;
+      padding: 0 0 2px;
+    }
+
+    .day {
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      color: #999;
+      background: #1a1a2e;
+      border-radius: 3px;
+      cursor: pointer;
+      position: relative;
+      user-select: none;
+      min-width: 24px;
+    }
+
+    .day:hover {
+      outline: 1px solid #64b5f6;
+      z-index: 1;
+    }
+
+    .day.empty {
+      background: transparent;
+      cursor: default;
+    }
+    .day.empty:hover {
+      outline: none;
+    }
+
+    .day.future {
+      color: #444;
+      cursor: default;
+    }
+    .day.future:hover {
+      outline: none;
+    }
+
+    .day.selected {
+      outline: 2px solid #64b5f6;
+      z-index: 2;
+    }
+
+    .day.in-range {
+      outline: 1px solid rgba(100, 181, 246, 0.4);
+      box-shadow: inset 0 0 0 1px rgba(100, 181, 246, 0.15);
+    }
+
+    .day .count {
+      position: absolute;
+      top: 1px;
+      right: 2px;
+      font-size: 0.5rem;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .legend {
+      display: flex;
+      gap: 1rem;
+      margin-top: 0.5rem;
+      font-size: 0.7rem;
+      color: #888;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .legend-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+    }
+
     .history { margin-top: 2rem; }
     .history h3 { color: #aaa; font-size: 0.95rem; margin-bottom: 0.75rem; }
 
@@ -93,6 +242,11 @@ export class SyncView extends LitElement {
   @state() private _error = '';
   @state() private _polling = false;
   @state() private _history: SyncLogEntry[] = [];
+  @state() private _coverage: SyncCoverage | null = null;
+  /** Tracks click state: 0=none, 1=start selected (waiting for end), 2=range complete */
+  @state() private _selectState: 0 | 1 | 2 = 0;
+  @state() private _previewCount: number | null = null;
+  @state() private _previewing = false;
 
   private _pollTimer?: ReturnType<typeof setInterval>;
 
@@ -100,6 +254,7 @@ export class SyncView extends LitElement {
     super.connectedCallback();
     this._fetchStatus();
     this._fetchHistory();
+    this._fetchCoverage();
   }
 
   disconnectedCallback() {
@@ -132,6 +287,7 @@ export class SyncView extends LitElement {
       this._pollTimer = undefined;
     }
     this._fetchHistory();
+    this._fetchCoverage();
   }
 
   private async _fetchHistory() {
@@ -140,8 +296,31 @@ export class SyncView extends LitElement {
     } catch { /* ignore */ }
   }
 
+  private async _fetchCoverage() {
+    try {
+      this._coverage = await getSyncCoverage();
+    } catch { /* ignore */ }
+  }
+
   private async _triggerSync() {
     this._error = '';
+    this._previewing = true;
+    try {
+      const result = await getSyncPreview({
+        replayDateAfter: this._dateAfter || undefined,
+        replayDateBefore: this._dateBefore || undefined,
+      });
+      this._previewCount = result.total;
+    } catch (e) {
+      this._error = String(e);
+    } finally {
+      this._previewing = false;
+    }
+  }
+
+  private async _confirmSync() {
+    this._error = '';
+    this._previewCount = null;
     try {
       await startSync({
         replayDateAfter: this._dateAfter || undefined,
@@ -154,24 +333,188 @@ export class SyncView extends LitElement {
     }
   }
 
+  private _cancelPreview() {
+    this._previewCount = null;
+  }
+
+  private _onDayClick(dateStr: string) {
+    if (this._selectState === 0) {
+      // First click: set start
+      this._dateAfter = dateStr;
+      this._dateBefore = '';
+      this._selectState = 1;
+    } else if (this._selectState === 1) {
+      // Second click: set end, ensure order
+      if (dateStr < this._dateAfter) {
+        this._dateBefore = this._dateAfter;
+        this._dateAfter = dateStr;
+      } else {
+        this._dateBefore = dateStr;
+      }
+      this._selectState = 2;
+    } else {
+      // Third click: reset and start fresh
+      this._dateAfter = dateStr;
+      this._dateBefore = '';
+      this._selectState = 1;
+    }
+  }
+
+  private _onDateInputAfter(e: Event) {
+    this._dateAfter = (e.target as HTMLInputElement).value;
+    // Reset select state so calendar highlights match
+    this._selectState = this._dateAfter && this._dateBefore ? 2 : this._dateAfter ? 1 : 0;
+  }
+
+  private _onDateInputBefore(e: Event) {
+    this._dateBefore = (e.target as HTMLInputElement).value;
+    this._selectState = this._dateAfter && this._dateBefore ? 2 : this._dateAfter ? 1 : 0;
+  }
+
+  private _getCalendarMonths(): { year: number; month: number }[] {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    // Find earliest date from replay data or synced ranges
+    let earliest: Date | null = null;
+    if (this._coverage) {
+      for (const d of Object.keys(this._coverage.replay_counts)) {
+        const dt = new Date(d);
+        if (!earliest || dt < earliest) earliest = dt;
+      }
+      for (const r of this._coverage.synced_ranges) {
+        if (r.date_after) {
+          const dt = new Date(r.date_after);
+          if (!earliest || dt < earliest) earliest = dt;
+        }
+      }
+    }
+
+    // Default: 3 months ago
+    const threeMonthsAgo = new Date(currentYear, currentMonth - 3, 1);
+    const start = earliest && earliest < threeMonthsAgo ? earliest : threeMonthsAgo;
+
+    const months: { year: number; month: number }[] = [];
+    let y = start.getFullYear();
+    let m = start.getMonth();
+    while (y < currentYear || (y === currentYear && m <= currentMonth)) {
+      months.push({ year: y, month: m });
+      m++;
+      if (m > 11) { m = 0; y++; }
+    }
+    return months;
+  }
+
+  private _renderMonth(year: number, month: number) {
+    const cov = this._coverage;
+    const replayCounts = cov?.replay_counts ?? {};
+    const ranges = cov?.synced_ranges ?? [];
+    const today = new Date();
+    const todayStr = fmtDate(today.getFullYear(), today.getMonth(), today.getDate());
+
+    const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const monthName = new Date(year, month).toLocaleString('default', { month: 'short', year: 'numeric' });
+
+    const cells = [];
+    // Empty cells for days before 1st
+    for (let i = 0; i < firstDay; i++) {
+      cells.push(html`<div class="day empty"></div>`);
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = fmtDate(year, month, d);
+      const isFuture = dateStr > todayStr;
+      const count = replayCounts[dateStr] ?? 0;
+      const bg = isFuture ? '' : dayCellColor(dateStr, replayCounts, ranges);
+
+      // Selection highlighting
+      const isStart = dateStr === this._dateAfter;
+      const isEnd = dateStr === this._dateBefore;
+      const isSelected = isStart || isEnd;
+      const inRange = this._dateAfter && this._dateBefore
+        && dateStr > this._dateAfter && dateStr < this._dateBefore;
+
+      const classes = [
+        'day',
+        isFuture ? 'future' : '',
+        isSelected ? 'selected' : '',
+        inRange ? 'in-range' : '',
+      ].filter(Boolean).join(' ');
+
+      cells.push(html`
+        <div class=${classes}
+             style=${bg ? `background: ${bg}` : ''}
+             title=${isFuture ? '' : count ? `${count} replays` : isCovered(dateStr, ranges) ? 'Synced, no replays' : 'Not synced'}
+             @click=${isFuture ? nothing : () => this._onDayClick(dateStr)}>
+          ${d}${count ? html`<span class="count">${count}</span>` : ''}
+        </div>
+      `);
+    }
+
+    return html`
+      <div class="month">
+        <div class="month-label">${monthName}</div>
+        <div class="month-grid">
+          ${['S','M','T','W','T','F','S'].map(d => html`<div class="dow">${d}</div>`)}
+          ${cells}
+        </div>
+      </div>
+    `;
+  }
+
   render() {
     const s = this._status;
+    const months = this._getCalendarMonths();
+
     return html`
       <div class="controls">
         <div class="field">
           <label>Date After</label>
           <input type="date" .value=${this._dateAfter}
-            @input=${(e: Event) => this._dateAfter = (e.target as HTMLInputElement).value}>
+            @input=${this._onDateInputAfter}>
         </div>
         <div class="field">
           <label>Date Before</label>
           <input type="date" .value=${this._dateBefore}
-            @input=${(e: Event) => this._dateBefore = (e.target as HTMLInputElement).value}>
+            @input=${this._onDateInputBefore}>
         </div>
-        <button @click=${this._triggerSync} ?disabled=${s?.running}>
-          ${s?.running ? 'Syncing...' : 'Start Sync'}
-        </button>
+        ${this._previewCount !== null ? html`
+          <div class="field" style="flex-direction: row; align-items: center; gap: 0.75rem;">
+            <strong>${this._previewCount} replays</strong> found. Sync?
+            <button @click=${this._confirmSync}>Confirm</button>
+            <button @click=${this._cancelPreview}>Cancel</button>
+          </div>
+        ` : html`
+          <button @click=${this._triggerSync} ?disabled=${s?.running || this._previewing}>
+            ${s?.running ? 'Syncing...' : this._previewing ? 'Checking...' : 'Start Sync'}
+          </button>
+        `}
       </div>
+
+      ${this._coverage ? html`
+        <div class="calendar">
+          <h3>Coverage</h3>
+          <div class="calendar-grid">
+            ${months.map(m => this._renderMonth(m.year, m.month))}
+          </div>
+          <div class="legend">
+            <div class="legend-item">
+              <div class="legend-swatch" style="background: #1a1a2e; border: 1px solid #333;"></div>
+              Not synced
+            </div>
+            <div class="legend-item">
+              <div class="legend-swatch" style="background: #1e2d4a;"></div>
+              Synced, no replays
+            </div>
+            <div class="legend-item">
+              <div class="legend-swatch" style="background: rgb(30, 160, 60);"></div>
+              Has replays
+            </div>
+          </div>
+        </div>
+      ` : ''}
 
       ${s ? html`
         <div class="status-card">
