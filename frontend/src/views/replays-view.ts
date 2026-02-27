@@ -1,6 +1,7 @@
 import { LitElement, html, css, nothing } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { getStatsReplays, type ReplayDetail } from '../lib/api.js';
+import { navigate } from '../lib/router.js';
 
 @customElement('replays-view')
 export class ReplaysView extends LitElement {
@@ -104,21 +105,55 @@ export class ReplaysView extends LitElement {
     .role-teammate { background: #1565c0; color: #bbdefb; }
     .role-opponent { background: #5d4037; color: #d7ccc8; }
 
+    .replay-link {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+    }
+
+    .replay-link:hover .replay {
+      border-color: #666;
+    }
+
+    .back-link {
+      display: inline-block;
+      color: #8888cc;
+      cursor: pointer;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+
+    .back-link:hover { color: #aaa; }
+
     .empty { color: #666; font-style: italic; }
     .error { color: #ef5350; }
   `;
 
   private static PAGE_SIZE = 50;
 
+  @property() replayId: string | null = null;
+
   @state() private _replays: ReplayDetail[] = [];
   @state() private _offset = 0;
   @state() private _loading = true;
   @state() private _error = '';
   @state() private _hasMore = true;
+  @state() private _detailReplay: ReplayDetail | null = null;
 
   connectedCallback() {
     super.connectedCallback();
-    this._load();
+    if (!this.replayId) this._load();
+  }
+
+  willUpdate(changed: Map<string, unknown>) {
+    if (changed.has('replayId')) {
+      if (this.replayId) {
+        this._loadDetail();
+      } else if (this._replays.length === 0) {
+        this._load();
+      }
+    }
   }
 
   private async _load() {
@@ -131,6 +166,29 @@ export class ReplaysView extends LitElement {
       });
       this._replays = data;
       this._hasMore = data.length === ReplaysView.PAGE_SIZE;
+    } catch (e) {
+      this._error = String(e);
+    }
+    this._loading = false;
+  }
+
+  private async _loadDetail() {
+    // Try to find in already-loaded list first
+    const cached = this._replays.find(r => r.id === this.replayId);
+    if (cached) {
+      this._detailReplay = cached;
+      this._loading = false;
+      return;
+    }
+    // Fetch from stats/replays (role-resolved) — small page, search for it
+    this._loading = true;
+    this._error = '';
+    try {
+      const data = await getStatsReplays({ limit: 200 });
+      this._detailReplay = data.find(r => r.id === this.replayId) ?? null;
+      if (!this._detailReplay) {
+        this._error = 'Replay not found';
+      }
     } catch (e) {
       this._error = String(e);
     }
@@ -179,11 +237,11 @@ export class ReplaysView extends LitElement {
     return `${m}:${String(s).padStart(2, '0')}`;
   }
 
-  private _renderReplay(r: ReplayDetail) {
+  private _renderReplay(r: ReplayDetail, linked = true) {
     const bluePlayers = r.players.filter(p => p.team === 'blue');
     const orangePlayers = r.players.filter(p => p.team === 'orange');
 
-    return html`
+    const card = html`
       <div class="replay ${this._resultClass(r)}">
         <div class="replay-header">
           <span class="replay-title">${r.title || r.id}</span>
@@ -223,9 +281,19 @@ export class ReplaysView extends LitElement {
         </div>
       </div>
     `;
+
+    if (!linked) return card;
+
+    return html`
+      <a class="replay-link"
+        @click=${(e: Event) => { e.preventDefault(); navigate(`/replays/${r.id}`); }}
+      >${card}</a>
+    `;
   }
 
   render() {
+    if (this.replayId) return this._renderDetail();
+
     if (this._loading) return html`<p>Loading replays...</p>`;
     if (this._error) return html`
       <div class="error">${this._error}</div>
@@ -245,6 +313,23 @@ export class ReplaysView extends LitElement {
             ${this._replays.map(r => this._renderReplay(r))}
           </div>`
       }
+    `;
+  }
+
+  private _renderDetail() {
+    if (this._loading) return html`<p>Loading replay...</p>`;
+    if (this._error) return html`
+      <span class="back-link" @click=${() => navigate('/replays')}>&larr; Back to replays</span>
+      <div class="error">${this._error}</div>
+    `;
+    if (!this._detailReplay) return html`
+      <span class="back-link" @click=${() => navigate('/replays')}>&larr; Back to replays</span>
+      <p class="empty">Replay not found.</p>
+    `;
+
+    return html`
+      <span class="back-link" @click=${() => navigate('/replays')}>&larr; Back to replays</span>
+      ${this._renderReplay(this._detailReplay, false)}
     `;
   }
 }

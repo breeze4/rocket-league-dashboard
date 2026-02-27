@@ -21,3 +21,6 @@ Frontend only: `cd frontend && npm run dev` (serves on :3000, proxies /api to :8
 ## Important constants
 
 - Uploader ID `76561197971332940` is hardcoded in `server.py`. All syncs filter to this uploader only.
+
+
+Write all plans to docs/plans/, not the home directory

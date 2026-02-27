@@ -34,7 +34,19 @@ Two-phase workflow:
 /api/maps                     -> GET: proxy to ballchasing /api/maps
 
 / (static)                    -> future frontend
+
+/api/stats/scoreline          -> GET: scoreline analysis — per-scoreline averages for positioning/speed
 ```
+
+## Scoreline Analysis
+
+The `/api/stats/scoreline` endpoint buckets all replays by normalized scoreline (my_goals-opp_goals, with "my team" always on the left). For each scoreline, it computes per-role averages (me, teammates, opponents) for:
+
+- `percent_behind_ball` — from `stats.positioning.percent_behind_ball`
+- `avg_speed` — from `stats.movement.avg_speed`
+- `avg_distance_to_ball` — from `stats.positioning.avg_distance_to_ball`
+
+Rows are sorted by goal differential descending (biggest wins first), then by my_goals descending. The frontend "Analysis" tab renders this as a table with green-tinted win rows and red-tinted loss rows.
 
 ## Player Identity Model
 
@@ -92,3 +104,21 @@ A completed sync covers a requested range `[A, B]` if `sync.date_after <= A` (or
 ```
 
 The `POST /api/sync` endpoint now returns `{"message": "Already synced", "covered_by": {...}}` if a covering sync exists, without making any API calls to ballchasing.
+
+## Frontend Routing
+
+Custom History API router (no library). The dev server uses `historyApiFallback` so direct URL loads work.
+
+### Routes
+
+```
+/              → redirect to /sync
+/sync          → sync view
+/players       → players view
+/stats         → stats view
+/analysis      → scoreline analysis view
+/replays       → replays list
+/replays/:id   → replay detail
+```
+
+Tab clicks call `navigate(path)` which pushes state and dispatches a `route-changed` event. The app shell reads the route on load and on `route-changed` / `popstate` to sync the active tab and subroute. Unknown paths redirect to `/sync`.

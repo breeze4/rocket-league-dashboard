@@ -23,6 +23,8 @@ from models import (
     PositioningStats,
     ReplayPlayer,
     ReplaySummary,
+    ScorelineRoleStats,
+    ScorelineRow,
     SyncLogEntry,
     SyncStatus,
 )
@@ -547,6 +549,91 @@ async def stats_replays(
             }
         )
     return results
+
+
+@app.get("/api/stats/scoreline")
+async def stats_scoreline() -> list[ScorelineRow]:
+    config = await db.get_player_config()
+    if not config.get("me"):
+        raise HTTPException(400, "Player config not set. PUT /api/players/config first.")
+
+    role_lookup = _build_role_lookup(config)
+    replays = await db.all_replay_data()
+
+    # Accumulators: (my_goals, opp_goals) -> {role: {field: [values]}}
+    buckets: dict[tuple[int, int], dict[str, dict[str, list[float]]]] = {}
+
+    for replay in replays:
+        my_team = _find_my_team(replay, role_lookup)
+        if not my_team:
+            continue
+
+        opp_color = "orange" if my_team == "blue" else "blue"
+        my_goals = _safe_get(replay, my_team, "stats", "core", "goals", default=0)
+        opp_goals = _safe_get(replay, opp_color, "stats", "core", "goals", default=0)
+        key = (my_goals, opp_goals)
+
+        if key not in buckets:
+            buckets[key] = {
+                "me": {"pbb": [], "spd": [], "dist": []},
+                "teammates": {"pbb": [], "spd": [], "dist": []},
+                "opponents": {"pbb": [], "spd": [], "dist": []},
+            }
+
+        for color in (my_team, opp_color):
+            team = replay.get(color, {})
+            is_my_team = color == my_team
+            for player in team.get("players", []):
+                stats = player.get("stats", {})
+                pbb = _safe_get(stats, "positioning", "percent_behind_ball", default=0)
+                spd = _safe_get(stats, "movement", "avg_speed", default=0)
+                dist = _safe_get(stats, "positioning", "avg_distance_to_ball", default=0)
+
+                if is_my_team:
+                    role = role_lookup.get(player.get("name", "").lower())
+                    if role == "me":
+                        bucket_key = "me"
+                    else:
+                        bucket_key = "teammates"
+                else:
+                    bucket_key = "opponents"
+
+                buckets[key][bucket_key]["pbb"].append(pbb)
+                buckets[key][bucket_key]["spd"].append(spd)
+                buckets[key][bucket_key]["dist"].append(dist)
+
+    def _avg(vals: list[float]) -> float:
+        return round(sum(vals) / len(vals), 1) if vals else 0.0
+
+    rows = []
+    for (mg, og), data in buckets.items():
+        me_data = data["me"]
+        games = len(me_data["pbb"])  # one entry per game for "me"
+        if games == 0:
+            continue
+        rows.append(ScorelineRow(
+            my_goals=mg,
+            opp_goals=og,
+            games=games,
+            me=ScorelineRoleStats(
+                percent_behind_ball=_avg(me_data["pbb"]),
+                avg_speed=_avg(me_data["spd"]),
+                avg_distance_to_ball=_avg(me_data["dist"]),
+            ),
+            teammates=ScorelineRoleStats(
+                percent_behind_ball=_avg(data["teammates"]["pbb"]),
+                avg_speed=_avg(data["teammates"]["spd"]),
+                avg_distance_to_ball=_avg(data["teammates"]["dist"]),
+            ),
+            opponents=ScorelineRoleStats(
+                percent_behind_ball=_avg(data["opponents"]["pbb"]),
+                avg_speed=_avg(data["opponents"]["spd"]),
+                avg_distance_to_ball=_avg(data["opponents"]["dist"]),
+            ),
+        ))
+
+    rows.sort(key=lambda r: (-r.my_goals, r.opp_goals))
+    return rows
 
 
 # --- Maps ---

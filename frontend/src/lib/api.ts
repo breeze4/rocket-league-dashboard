@@ -125,6 +125,21 @@ export interface ReplayDetail {
   players: ReplayPlayer[];
 }
 
+export interface ScorelineRoleStats {
+  percent_behind_ball: number;
+  avg_speed: number;
+  avg_distance_to_ball: number;
+}
+
+export interface ScorelineRow {
+  my_goals: number;
+  opp_goals: number;
+  games: number;
+  me: ScorelineRoleStats;
+  teammates: ScorelineRoleStats;
+  opponents: ScorelineRoleStats;
+}
+
 // --- Helpers ---
 
 async function get<T>(url: string): Promise<T> {
@@ -266,4 +281,8 @@ export function getStatsReplays(params: StatsReplayParams = {}) {
   if (params.offset) q.set('offset', String(params.offset));
   const qs = q.toString();
   return get<ReplayDetail[]>(`/api/stats/replays${qs ? '?' + qs : ''}`);
+}
+
+export function getScorelineStats() {
+  return get<ScorelineRow[]>('/api/stats/scoreline');
 }

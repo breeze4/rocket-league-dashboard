@@ -12,5 +12,6 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:8000',
     },
+    historyApiFallback: true,
   },
 });

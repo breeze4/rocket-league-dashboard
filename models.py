@@ -114,6 +114,21 @@ class PlayerStats(BaseModel):
     stats: AggregatedStats = AggregatedStats()
 
 
+class ScorelineRoleStats(BaseModel):
+    percent_behind_ball: float = 0.0
+    avg_speed: float = 0.0
+    avg_distance_to_ball: float = 0.0
+
+
+class ScorelineRow(BaseModel):
+    my_goals: int
+    opp_goals: int
+    games: int
+    me: ScorelineRoleStats
+    teammates: ScorelineRoleStats
+    opponents: ScorelineRoleStats
+
+
 class ReplaySummary(BaseModel):
     id: str
     title: str | None = None

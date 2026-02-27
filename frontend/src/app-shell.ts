@@ -1,17 +1,20 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
+import { navigate, getRoute } from './lib/router.js';
 
 import './views/sync-view.js';
 import './views/players-view.js';
 import './views/stats-view.js';
 import './views/replays-view.js';
+import './views/scoreline-view.js';
 
-type Tab = 'sync' | 'players' | 'stats' | 'replays';
+type Tab = 'sync' | 'players' | 'stats' | 'analysis' | 'replays';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'sync', label: 'Sync' },
   { id: 'players', label: 'Players' },
   { id: 'stats', label: 'Stats' },
+  { id: 'analysis', label: 'Analysis' },
   { id: 'replays', label: 'Replays' },
 ];
 
@@ -69,13 +72,36 @@ export class AppShell extends LitElement {
   `;
 
   @state() private _tab: Tab = 'sync';
+  @state() private _sub: string | null = null;
+
+  private _onRouteChanged = () => {
+    const route = getRoute();
+    this._tab = route.tab as Tab;
+    this._sub = route.sub;
+  };
+
+  connectedCallback() {
+    super.connectedCallback();
+    this._onRouteChanged();
+    // Redirect bare / to /sync
+    if (location.pathname === '/' || location.pathname === '') {
+      navigate('/sync');
+    }
+    window.addEventListener('route-changed', this._onRouteChanged);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener('route-changed', this._onRouteChanged);
+  }
 
   private _renderView() {
     switch (this._tab) {
       case 'sync': return html`<sync-view></sync-view>`;
       case 'players': return html`<players-view></players-view>`;
       case 'stats': return html`<stats-view></stats-view>`;
-      case 'replays': return html`<replays-view></replays-view>`;
+      case 'analysis': return html`<scoreline-view></scoreline-view>`;
+      case 'replays': return html`<replays-view .replayId=${this._sub}></replays-view>`;
     }
   }
 
@@ -87,7 +113,7 @@ export class AppShell extends LitElement {
           ${TABS.map(t => html`
             <button
               aria-selected="${this._tab === t.id}"
-              @click=${() => this._tab = t.id}
+              @click=${() => navigate(`/${t.id}`)}
             >${t.label}</button>
           `)}
         </nav>
