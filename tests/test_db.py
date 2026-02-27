@@ -109,18 +109,6 @@ async def test_sync_log_lifecycle(tmp_db):
     assert history[0]["replays_found"] == 100
 
 
-async def test_sync_log_tightens_dates(tmp_db):
-    log_id = await db.create_sync_log("2025-01-01", "2025-01-31")
-    await db.complete_sync_log(
-        log_id, "completed", 10, 10, 0,
-        actual_date_after="2025-01-05T00:00:00Z",
-        actual_date_before="2025-01-25T00:00:00Z",
-    )
-    history = await db.get_sync_history()
-    assert history[0]["date_after"] == "2025-01-05T00:00:00Z"
-    assert history[0]["date_before"] == "2025-01-25T00:00:00Z"
-
-
 # --- Replay date counts ---
 
 

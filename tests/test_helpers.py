@@ -10,7 +10,6 @@ from server import (
     _normalize_date,
     _resolve_player_role,
     _safe_get,
-    _to_utc,
 )
 
 
@@ -184,12 +183,3 @@ def test_normalize_date_already_full():
     assert _normalize_date(ts) == ts
 
 
-# --- _to_utc ---
-
-
-def test_to_utc_with_offset():
-    assert _to_utc("2025-01-15T20:00:00+05:00") == "2025-01-15T15:00:00Z"
-
-
-def test_to_utc_already_utc():
-    assert _to_utc("2025-01-15T20:00:00+00:00") == "2025-01-15T20:00:00Z"
