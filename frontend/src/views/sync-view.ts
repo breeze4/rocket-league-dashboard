@@ -581,7 +581,7 @@ export class SyncView extends LitElement {
       return html`
         <div class="rate-bucket">
           <span class="bucket-label">${label}</span>
-          <span>unlimited</span>
+          <span>${bucket.hour_used} req/hr</span>
         </div>
       `;
     }

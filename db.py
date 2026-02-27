@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import aiosqlite
 
@@ -258,3 +258,27 @@ async def find_covering_sync(
         )
         row = await cursor.fetchone()
         return dict(row) if row else None
+
+
+async def estimate_api_calls_last_hour() -> tuple[int, int]:
+    """Estimate list/get API calls from sync_log entries in the last hour.
+
+    Returns (list_calls, get_calls). List calls are derived from
+    replays_found (ceil(found/200) pages, min 1 per sync). Get calls
+    equal replays_fetched.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    async with aiosqlite.connect(DB_PATH) as conn:
+        cursor = await conn.execute(
+            "SELECT replays_found, replays_fetched FROM sync_log "
+            "WHERE started_at >= ?",
+            (cutoff,),
+        )
+        rows = await cursor.fetchall()
+
+    list_calls = 0
+    get_calls = 0
+    for found, fetched in rows:
+        list_calls += max(1, (found + 199) // 200)
+        get_calls += fetched or 0
+    return list_calls, get_calls

@@ -40,7 +40,7 @@ class TokenBucket:
         self._tokens = min(self.per_second, self._tokens + elapsed * self.per_second)
         self._last_refill = now
 
-        if self.per_hour is not None and (now - self._hour_start) >= 3600:
+        if (now - self._hour_start) >= 3600:
             self._hour_tokens = 0
             self._hour_start = now
 
@@ -57,29 +57,27 @@ class TokenBucket:
 
                 if self._tokens >= 1:
                     self._tokens -= 1
-                    if self.per_hour is not None:
-                        self._hour_tokens += 1
+                    self._hour_tokens += 1
                     return
 
             await asyncio.sleep(1.0 / self.per_second)
 
+    def seed_usage(self, hour_used: int) -> None:
+        """Initialize hourly counter from persisted data after restart."""
+        self._hour_tokens = hour_used
+        self._hour_start = time.monotonic()
+
     def snapshot(self) -> dict:
         """Return current bucket state without acquiring a token."""
         self._refill()
-        result: dict = {
+        elapsed = time.monotonic() - self._hour_start
+        return {
             "per_second": self.per_second,
             "tokens_available": round(self._tokens, 1),
+            "per_hour": self.per_hour,
+            "hour_used": self._hour_tokens,
+            "seconds_until_reset": max(0, round(3600 - elapsed)),
         }
-        if self.per_hour is not None:
-            elapsed = time.monotonic() - self._hour_start
-            result["per_hour"] = self.per_hour
-            result["hour_used"] = self._hour_tokens
-            result["seconds_until_reset"] = max(0, round(3600 - elapsed))
-        else:
-            result["per_hour"] = None
-            result["hour_used"] = 0
-            result["seconds_until_reset"] = 0
-        return result
 
 
 class BallchasingClient:
