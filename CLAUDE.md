@@ -2,14 +2,9 @@
 
 ## Run (dev)
 
-Backend + frontend together:
+Backend + frontend together: `./dev.sh`
 
-```sh
-cd /home/breeze/dev/ballchasing && \
-  (cd frontend && npm run dev) & \
-  (source venv/bin/activate && uvicorn server:app --reload --port 8000) & \
-  wait
-```
+Logs are written to `logs/` with `[backend]`/`[frontend]` prefixes on terminal output. Backend logs rotate on uvicorn hot reloads.
 
 Backend only: `source venv/bin/activate && uvicorn server:app --reload --port 8000`
 
