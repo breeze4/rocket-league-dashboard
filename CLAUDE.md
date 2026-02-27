@@ -1,4 +1,4 @@
-# Ballchasing Stats
+You are running in WSL on windows. I am developing in Windows with VS code. I am using a windows browser (Chrome).
 
 ## Run (dev)
 
