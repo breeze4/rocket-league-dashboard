@@ -52,12 +52,6 @@ def _normalize_date(value: str | None, end_of_day: bool = False) -> str | None:
     return value
 
 
-def _to_utc(iso: str) -> str:
-    """Convert any ISO timestamp to UTC with Z suffix."""
-    dt = datetime.fromisoformat(iso)
-    utc = dt.astimezone(timezone.utc)
-    return utc.strftime("%Y-%m-%dT%H:%M:%SZ")
-
 client: BallchasingClient
 sync_status = SyncStatus(running=False)
 
@@ -121,13 +115,6 @@ async def sync_replays(
     date_after = _normalize_date(replay_date_after, end_of_day=False)
     date_before = _normalize_date(replay_date_before, end_of_day=True)
 
-    # Coverage check uses UTC for consistent comparison with stored bounds
-    coverage_after = _to_utc(date_after) if date_after else None
-    coverage_before = _to_utc(date_before) if date_before else None
-    covering = await db.find_covering_sync(coverage_after, coverage_before)
-    if covering:
-        return {"message": "Already synced", "covered_by": covering}
-
     sync_status = SyncStatus(running=True)
     asyncio.create_task(_do_sync(date_after, date_before))
     return {"message": "Sync started"}
@@ -168,8 +155,6 @@ async def _do_sync(
 
         next_url: str | None = None
         first_page = True
-        newest_replay_utc: str | None = None
-        oldest_replay_utc: str | None = None
 
         while True:
             if first_page:
@@ -183,14 +168,6 @@ async def _do_sync(
             sync_status.replays_found += len(replay_list)
 
             for replay_summary in replay_list:
-                replay_date = replay_summary.get("date")
-                if replay_date:
-                    utc_date = _to_utc(replay_date)
-                    if newest_replay_utc is None or utc_date > newest_replay_utc:
-                        newest_replay_utc = utc_date
-                    if oldest_replay_utc is None or utc_date < oldest_replay_utc:
-                        oldest_replay_utc = utc_date
-
                 rid = replay_summary["id"]
                 if await db.replay_exists(rid):
                     sync_status.replays_skipped += 1
@@ -218,8 +195,6 @@ async def _do_sync(
             log_id, "completed",
             sync_status.replays_found, sync_status.replays_fetched,
             sync_status.replays_skipped,
-            actual_date_after=oldest_replay_utc,
-            actual_date_before=newest_replay_utc,
         )
     except Exception as e:
         sync_status.error = str(e)

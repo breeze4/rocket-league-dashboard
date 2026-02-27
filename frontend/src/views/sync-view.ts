@@ -10,11 +10,11 @@ function fmtDate(y: number, m: number, d: number): string {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-/** Check if dateStr falls within any synced range. */
+/** Check if dateStr (YYYY-MM-DD) falls within any synced range. */
 function isCovered(dateStr: string, ranges: SyncCoverage['synced_ranges']): boolean {
   for (const r of ranges) {
-    const afterOk = r.date_after === null || dateStr >= r.date_after;
-    const beforeOk = r.date_before === null || dateStr <= r.date_before;
+    const afterOk = r.date_after === null || dateStr >= r.date_after.slice(0, 10);
+    const beforeOk = r.date_before === null || dateStr <= r.date_before.slice(0, 10);
     if (afterOk && beforeOk) return true;
   }
   return false;
@@ -278,7 +278,10 @@ export class SyncView extends LitElement {
 
   private _startPolling() {
     this._polling = true;
-    this._pollTimer = setInterval(() => this._fetchStatus(), 1000);
+    this._pollTimer = setInterval(() => {
+      this._fetchStatus();
+      this._fetchCoverage();
+    }, 1000);
   }
 
   private _stopPolling() {
