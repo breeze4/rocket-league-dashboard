@@ -1,7 +1,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getStatsReplays, type ReplayDetail } from '../lib/api.js';
-import { navigate } from '../lib/router.js';
+import { navigate, getSearchParams, replaceSearchParams } from '../lib/router.js';
 
 @customElement('replays-view')
 export class ReplaysView extends LitElement {
@@ -141,9 +141,34 @@ export class ReplaysView extends LitElement {
   @state() private _hasMore = true;
   @state() private _detailReplay: ReplayDetail | null = null;
 
+  private _onRouteChanged = () => this._readURL();
+
   connectedCallback() {
     super.connectedCallback();
+    this._readURL();
     if (!this.replayId) this._load();
+    window.addEventListener('route-changed', this._onRouteChanged);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener('route-changed', this._onRouteChanged);
+  }
+
+  private _readURL() {
+    if (this.replayId) return; // detail view doesn't use pagination
+    const p = getSearchParams();
+    const page = parseInt(p.get('p') || '1');
+    const newOffset = (Math.max(1, page) - 1) * ReplaysView.PAGE_SIZE;
+    if (newOffset !== this._offset) {
+      this._offset = newOffset;
+      this._load();
+    }
+  }
+
+  private _writePageURL() {
+    const page = Math.floor(this._offset / ReplaysView.PAGE_SIZE) + 1;
+    replaceSearchParams({ p: page > 1 ? String(page) : null });
   }
 
   willUpdate(changed: Map<string, unknown>) {
@@ -197,11 +222,13 @@ export class ReplaysView extends LitElement {
 
   private _prev() {
     this._offset = Math.max(0, this._offset - ReplaysView.PAGE_SIZE);
+    this._writePageURL();
     this._load();
   }
 
   private _next() {
     this._offset += ReplaysView.PAGE_SIZE;
+    this._writePageURL();
     this._load();
   }
 

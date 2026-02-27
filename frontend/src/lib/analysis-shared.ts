@@ -1,5 +1,6 @@
 import { css, html, type TemplateResult } from 'lit';
 import type { ScorelineRoleStats } from './api.js';
+import { getSearchParams, replaceSearchParams } from './router.js';
 
 // --- Types ---
 
@@ -378,16 +379,16 @@ export function renderModeBar(
 
 /** Render filter checkboxes for excluding noise */
 export function renderFilterBar(
-  excludeZeroZero: boolean,
+  excludeTies: boolean,
   excludeShort: boolean,
-  toggleZeroZero: () => void,
+  toggleTies: () => void,
   toggleShort: () => void,
 ): TemplateResult {
   return html`
     <div class="filter-bar">
       <label>
-        <input type="checkbox" .checked=${excludeZeroZero} @change=${toggleZeroZero}>
-        Exclude 0-0 games
+        <input type="checkbox" .checked=${excludeTies} @change=${toggleTies}>
+        Exclude tie games
       </label>
       <label>
         <input type="checkbox" .checked=${excludeShort} @change=${toggleShort}>
@@ -470,4 +471,77 @@ export function formatDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     + ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+// --- URL ↔ Filter State ---
+
+const VALID_PLAYLIST_KEYS = PLAYLIST_OPTIONS.map(o => o.key) as string[];
+
+/** Serialize playlist state to comma-separated key string (only enabled keys). */
+function playlistStateToKeys(state: PlaylistState): string {
+  return PLAYLIST_OPTIONS.filter(o => state[o.key]).map(o => o.key).join(',');
+}
+
+/** Deserialize comma-separated key string to PlaylistState. */
+function keysToPlaylistState(keys: string): PlaylistState {
+  const active = keys.split(',').filter(k => VALID_PLAYLIST_KEYS.includes(k));
+  const state = { ...DEFAULT_PLAYLIST_STATE };
+  for (const key of VALID_PLAYLIST_KEYS) {
+    (state as Record<string, boolean>)[key] = active.includes(key);
+  }
+  return state;
+}
+
+const DEFAULT_PLAYLIST_KEYS = playlistStateToKeys(DEFAULT_PLAYLIST_STATE);
+
+export interface AnalysisFilters {
+  teamSize: number;
+  excludeTies: boolean;
+  excludeShort: boolean;
+  playlistState: PlaylistState;
+  allModes: boolean;
+}
+
+/** Read shared analysis filters from current URL params. */
+export function readFiltersFromURL(): AnalysisFilters {
+  const p = getSearchParams();
+  const ts = parseInt(p.get('ts') || '');
+  const teamSize = [1, 2, 3].includes(ts) ? ts : 2;
+  const excludeTies = p.get('ez') !== '0';
+  const excludeShort = p.get('es') !== '0';
+  const allModes = p.get('all') === '1';
+  const plKeys = p.get('pl');
+  const playlistState = plKeys !== null ? keysToPlaylistState(plKeys) : { ...DEFAULT_PLAYLIST_STATE };
+  return { teamSize, excludeTies, excludeShort, playlistState, allModes };
+}
+
+/** Write shared analysis filters to URL params (omitting defaults). */
+export function writeFiltersToURL(f: AnalysisFilters) {
+  const plKeys = playlistStateToKeys(f.playlistState);
+  replaceSearchParams({
+    ts: f.teamSize !== 2 ? String(f.teamSize) : null,
+    ez: !f.excludeTies ? '0' : null,
+    es: !f.excludeShort ? '0' : null,
+    pl: plKeys !== DEFAULT_PLAYLIST_KEYS ? plKeys : null,
+    all: f.allModes ? '1' : null,
+  });
+}
+
+/** Read sort params from URL. */
+export function readSortFromURL(defaultKey: SortKey, defaultDir: SortDir): { sortKey: SortKey; sortDir: SortDir } {
+  const p = getSearchParams();
+  const VALID_SORT_KEYS: SortKey[] = ['score', 'games', 'date', 'pbb', 'spd', 'dist'];
+  const rawKey = p.get('sort') || '';
+  const rawDir = p.get('dir') || '';
+  const sortKey = VALID_SORT_KEYS.includes(rawKey as SortKey) ? rawKey as SortKey : defaultKey;
+  const sortDir = (rawDir === 'asc' || rawDir === 'desc') ? rawDir : defaultDir;
+  return { sortKey, sortDir };
+}
+
+/** Write sort params to URL (omitting defaults). */
+export function writeSortToURL(key: SortKey, dir: SortDir, defaultKey: SortKey, defaultDir: SortDir) {
+  replaceSearchParams({
+    sort: key !== defaultKey ? key : null,
+    dir: dir !== defaultDir ? dir : null,
+  });
 }

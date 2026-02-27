@@ -6,6 +6,7 @@ import {
   renderModeBar, renderFilterBar, renderPlaylistFilter, playlistsFromState,
   rowClass, formatDate, type SortKey, type SortDir,
   DEFAULT_PLAYLIST_STATE, type PlaylistState, PLAYLIST_OPTIONS,
+  readFiltersFromURL, writeFiltersToURL, readSortFromURL, writeSortToURL,
 } from '../lib/analysis-shared.js';
 
 @customElement('scoreline-view')
@@ -83,15 +84,60 @@ export class ScorelineView extends LitElement {
   @state() private _sortKey: SortKey = 'score';
   @state() private _sortDir: SortDir = 'desc';
   @state() private _teamSize = 2;
-  @state() private _excludeZeroZero = true;
+  @state() private _excludeTies = true;
   @state() private _excludeShort = true;
   @state() private _playlistState: PlaylistState = { ...DEFAULT_PLAYLIST_STATE };
   @state() private _allModes = false;
   @state() private _expanded = new Set<string>();
 
+  private _onRouteChanged = () => this._readURL();
+
   connectedCallback() {
     super.connectedCallback();
+    this._readURL();
     this._load();
+    window.addEventListener('route-changed', this._onRouteChanged);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener('route-changed', this._onRouteChanged);
+  }
+
+  private _readURL() {
+    const f = readFiltersFromURL();
+    const s = readSortFromURL('score', 'desc');
+    let changed = false;
+    if (f.teamSize !== this._teamSize || f.excludeTies !== this._excludeTies ||
+        f.excludeShort !== this._excludeShort || f.allModes !== this._allModes) {
+      changed = true;
+    }
+    // Check playlist state
+    for (const opt of PLAYLIST_OPTIONS) {
+      if (f.playlistState[opt.key] !== this._playlistState[opt.key]) {
+        changed = true;
+        break;
+      }
+    }
+    this._teamSize = f.teamSize;
+    this._excludeTies = f.excludeTies;
+    this._excludeShort = f.excludeShort;
+    this._playlistState = f.playlistState;
+    this._allModes = f.allModes;
+    this._sortKey = s.sortKey;
+    this._sortDir = s.sortDir;
+    if (changed && !this._loading) this._load();
+  }
+
+  private _writeURL() {
+    writeFiltersToURL({
+      teamSize: this._teamSize,
+      excludeTies: this._excludeTies,
+      excludeShort: this._excludeShort,
+      playlistState: this._playlistState,
+      allModes: this._allModes,
+    });
+    writeSortToURL(this._sortKey, this._sortDir, 'score', 'desc');
   }
 
   private async _load() {
@@ -100,7 +146,7 @@ export class ScorelineView extends LitElement {
     this._expanded = new Set();
     const params = {
       teamSize: this._teamSize,
-      excludeZeroZero: this._excludeZeroZero,
+      excludeTies: this._excludeTies,
       minDuration: this._excludeShort ? 90 : 0,
       playlists: playlistsFromState(this._playlistState, this._allModes),
     };
@@ -120,6 +166,7 @@ export class ScorelineView extends LitElement {
   private _setTeamSize(size: number) {
     if (size === this._teamSize) return;
     this._teamSize = size;
+    this._writeURL();
     this._load();
   }
 
@@ -148,6 +195,7 @@ export class ScorelineView extends LitElement {
       this._sortKey = key;
       this._sortDir = 'desc';
     }
+    this._writeURL();
   }
 
   private _scoreCompare(a: ScorelineRow, b: ScorelineRow, dir: 'desc' | 'asc'): number {
@@ -190,13 +238,13 @@ export class ScorelineView extends LitElement {
     if (this._loading) return html`<p>Loading scoreline data...</p>`;
     const playlistFilter = renderPlaylistFilter(
       this._playlistState, this._allModes,
-      (key) => { this._playlistState = { ...this._playlistState, [key]: !this._playlistState[key] }; this._load(); },
-      () => { this._allModes = !this._allModes; this._load(); },
+      (key) => { this._playlistState = { ...this._playlistState, [key]: !this._playlistState[key] }; this._writeURL(); this._load(); },
+      () => { this._allModes = !this._allModes; this._writeURL(); this._load(); },
     );
     const filterBar = renderFilterBar(
-      this._excludeZeroZero, this._excludeShort,
-      () => { this._excludeZeroZero = !this._excludeZeroZero; this._load(); },
-      () => { this._excludeShort = !this._excludeShort; this._load(); },
+      this._excludeTies, this._excludeShort,
+      () => { this._excludeTies = !this._excludeTies; this._writeURL(); this._load(); },
+      () => { this._excludeShort = !this._excludeShort; this._writeURL(); this._load(); },
     );
 
     if (this._error) return html`

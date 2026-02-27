@@ -103,7 +103,7 @@ export class AppShell extends LitElement {
       case 'sync': return html`<sync-view></sync-view>`;
       case 'players': return html`<players-view></players-view>`;
       case 'stats': return html`<stats-view></stats-view>`;
-      case 'analysis': return html`<analysis-view></analysis-view>`;
+      case 'analysis': return html`<analysis-view .sub=${this._sub}></analysis-view>`;
       case 'replays': return html`<replays-view .replayId=${this._sub}></replays-view>`;
     }
   }

@@ -14,7 +14,9 @@ import {
   DEFAULT_PLAYLIST_STATE,
   type PlaylistState,
   PLAYLIST_OPTIONS,
+  readFiltersFromURL, writeFiltersToURL,
 } from '../lib/analysis-shared.js';
+import { getSearchParams, replaceSearchParams } from '../lib/router.js';
 
 interface StatOption {
   value: string;
@@ -72,11 +74,15 @@ const STAT_GROUPS: StatGroup[] = [
   },
 ];
 
+const ALL_STAT_VALUES = STAT_GROUPS.flatMap(g => g.options.map(o => o.value));
+
 const ROLE_OPTIONS = [
   { value: 'me', label: 'Me' },
   { value: 'teammates', label: 'Teammates' },
   { value: 'opponents', label: 'Opponents' },
 ];
+
+const VALID_ROLES = ROLE_OPTIONS.map(o => o.value);
 
 @customElement('correlation-view')
 export class CorrelationView extends LitElement {
@@ -183,14 +189,71 @@ export class CorrelationView extends LitElement {
   @state() private _stat = 'percent_behind_ball';
   @state() private _role = 'me';
   @state() private _teamSize = 2;
-  @state() private _excludeZeroZero = true;
+  @state() private _excludeTies = true;
   @state() private _excludeShort = true;
   @state() private _playlistState: PlaylistState = { ...DEFAULT_PLAYLIST_STATE };
   @state() private _allModes = false;
 
+  private _onRouteChanged = () => this._readURL();
+
   connectedCallback() {
     super.connectedCallback();
+    this._readURL();
     this._load();
+    window.addEventListener('route-changed', this._onRouteChanged);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener('route-changed', this._onRouteChanged);
+  }
+
+  private _readURL() {
+    const f = readFiltersFromURL();
+    const p = getSearchParams();
+
+    let changed = false;
+    if (f.teamSize !== this._teamSize || f.excludeTies !== this._excludeTies ||
+        f.excludeShort !== this._excludeShort || f.allModes !== this._allModes) {
+      changed = true;
+    }
+    for (const opt of PLAYLIST_OPTIONS) {
+      if (f.playlistState[opt.key] !== this._playlistState[opt.key]) {
+        changed = true;
+        break;
+      }
+    }
+
+    const rawStat = p.get('stat') || '';
+    const stat = ALL_STAT_VALUES.includes(rawStat) ? rawStat : 'percent_behind_ball';
+    const rawRole = p.get('role') || '';
+    const role = VALID_ROLES.includes(rawRole) ? rawRole : 'me';
+
+    if (stat !== this._stat || role !== this._role) changed = true;
+
+    this._teamSize = f.teamSize;
+    this._excludeTies = f.excludeTies;
+    this._excludeShort = f.excludeShort;
+    this._playlistState = f.playlistState;
+    this._allModes = f.allModes;
+    this._stat = stat;
+    this._role = role;
+
+    if (changed && !this._loading) this._load();
+  }
+
+  private _writeURL() {
+    writeFiltersToURL({
+      teamSize: this._teamSize,
+      excludeTies: this._excludeTies,
+      excludeShort: this._excludeShort,
+      playlistState: this._playlistState,
+      allModes: this._allModes,
+    });
+    replaceSearchParams({
+      stat: this._stat !== 'percent_behind_ball' ? this._stat : null,
+      role: this._role !== 'me' ? this._role : null,
+    });
   }
 
   private async _load() {
@@ -202,7 +265,7 @@ export class CorrelationView extends LitElement {
         stat: this._stat,
         role: this._role,
         teamSize: this._teamSize,
-        excludeZeroZero: this._excludeZeroZero,
+        excludeTies: this._excludeTies,
         minDuration: this._excludeShort ? 90 : undefined,
         playlists: playlists.length ? playlists : undefined,
       });
@@ -214,6 +277,7 @@ export class CorrelationView extends LitElement {
 
   private _setTeamSize(s: number) {
     this._teamSize = s;
+    this._writeURL();
     this._load();
   }
 
@@ -507,14 +571,14 @@ export class CorrelationView extends LitElement {
     const playlistFilter = renderPlaylistFilter(
       this._playlistState,
       this._allModes,
-      (key) => { this._playlistState = { ...this._playlistState, [key]: !this._playlistState[key] }; this._load(); },
-      () => { this._allModes = !this._allModes; this._load(); },
+      (key) => { this._playlistState = { ...this._playlistState, [key]: !this._playlistState[key] }; this._writeURL(); this._load(); },
+      () => { this._allModes = !this._allModes; this._writeURL(); this._load(); },
     );
     const filterBar = renderFilterBar(
-      this._excludeZeroZero,
+      this._excludeTies,
       this._excludeShort,
-      () => { this._excludeZeroZero = !this._excludeZeroZero; this._load(); },
-      () => { this._excludeShort = !this._excludeShort; this._load(); },
+      () => { this._excludeTies = !this._excludeTies; this._writeURL(); this._load(); },
+      () => { this._excludeShort = !this._excludeShort; this._writeURL(); this._load(); },
     );
 
     if (this._loading) return html`
@@ -546,7 +610,7 @@ export class CorrelationView extends LitElement {
 
       <div class="controls">
         <label>Stat:
-          <select @change=${(e: Event) => { this._stat = (e.target as HTMLSelectElement).value; this._load(); }}>
+          <select @change=${(e: Event) => { this._stat = (e.target as HTMLSelectElement).value; this._writeURL(); this._load(); }}>
             ${STAT_GROUPS.map(g => html`
               <optgroup label=${g.label}>
                 ${g.options.map(o => html`
@@ -557,7 +621,7 @@ export class CorrelationView extends LitElement {
           </select>
         </label>
         <label>Role:
-          <select @change=${(e: Event) => { this._role = (e.target as HTMLSelectElement).value; this._load(); }}>
+          <select @change=${(e: Event) => { this._role = (e.target as HTMLSelectElement).value; this._writeURL(); this._load(); }}>
             ${ROLE_OPTIONS.map(o => html`
               <option value=${o.value} ?selected=${o.value === this._role}>${o.label}</option>
             `)}

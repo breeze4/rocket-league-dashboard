@@ -1,11 +1,14 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
+import { navigate } from '../lib/router.js';
 
 import './scoreline-view.js';
 import './game-analysis-view.js';
 import './correlation-view.js';
 
 type SubView = 'scoreline' | 'games' | 'correlation';
+
+const VALID_SUBS: SubView[] = ['scoreline', 'games', 'correlation'];
 
 @customElement('analysis-view')
 export class AnalysisView extends LitElement {
@@ -42,21 +45,51 @@ export class AnalysisView extends LitElement {
     }
   `;
 
-  @state() private _subView: SubView = 'scoreline';
+  @property() sub: string | null = null;
+
+  private get _activeView(): SubView {
+    if (this.sub && VALID_SUBS.includes(this.sub as SubView)) {
+      return this.sub as SubView;
+    }
+    return 'scoreline';
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    // Redirect /analysis to /analysis/scoreline (replace, not push — avoids extra history entry)
+    if (!this.sub || !VALID_SUBS.includes(this.sub as SubView)) {
+      const url = '/analysis/scoreline' + location.search;
+      history.replaceState(null, '', url);
+      window.dispatchEvent(new Event('route-changed'));
+    }
+  }
+
+  willUpdate(changed: Map<string, unknown>) {
+    if (changed.has('sub') && (!this.sub || !VALID_SUBS.includes(this.sub as SubView))) {
+      const url = '/analysis/scoreline' + location.search;
+      history.replaceState(null, '', url);
+      window.dispatchEvent(new Event('route-changed'));
+    }
+  }
+
+  private _navigate(sub: SubView) {
+    navigate('/analysis/' + sub + location.search);
+  }
 
   render() {
+    const view = this._activeView;
     return html`
       <div class="sub-nav">
-        <button class="${this._subView === 'scoreline' ? 'active' : ''}"
-                @click=${() => this._subView = 'scoreline'}>Per Scoreline</button>
-        <button class="${this._subView === 'games' ? 'active' : ''}"
-                @click=${() => this._subView = 'games'}>Per Game</button>
-        <button class="${this._subView === 'correlation' ? 'active' : ''}"
-                @click=${() => this._subView = 'correlation'}>Correlations</button>
+        <button class="${view === 'scoreline' ? 'active' : ''}"
+                @click=${() => this._navigate('scoreline')}>Per Scoreline</button>
+        <button class="${view === 'games' ? 'active' : ''}"
+                @click=${() => this._navigate('games')}>Per Game</button>
+        <button class="${view === 'correlation' ? 'active' : ''}"
+                @click=${() => this._navigate('correlation')}>Correlations</button>
       </div>
-      ${this._subView === 'scoreline'
+      ${view === 'scoreline'
         ? html`<scoreline-view></scoreline-view>`
-        : this._subView === 'games'
+        : view === 'games'
         ? html`<game-analysis-view></game-analysis-view>`
         : html`<correlation-view></correlation-view>`}
     `;

@@ -14,8 +14,36 @@ export function getRoute(): Route {
   return { tab, sub: parts[1] || null };
 }
 
+/** Read current URL search params. */
+export function getSearchParams(): URLSearchParams {
+  return new URLSearchParams(location.search);
+}
+
+/**
+ * Update URL query params via replaceState (no history entry).
+ * Pass null to remove a param. Params with empty string values are also removed.
+ */
+export function replaceSearchParams(updates: Record<string, string | null>) {
+  const params = new URLSearchParams(location.search);
+  for (const [key, value] of Object.entries(updates)) {
+    if (value === null || value === '') {
+      params.delete(key);
+    } else {
+      params.set(key, value);
+    }
+  }
+  const search = params.toString();
+  const url = location.pathname + (search ? '?' + search : '');
+  history.replaceState(null, '', url);
+}
+
+/**
+ * Navigate to a new path (pushState). The path may include a query string.
+ * Compares full pathname+search to avoid no-op pushes.
+ */
 export function navigate(path: string) {
-  if (location.pathname === path) return;
+  const current = location.pathname + location.search;
+  if (current === path) return;
   history.pushState(null, '', path);
   window.dispatchEvent(new Event('route-changed'));
 }

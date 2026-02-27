@@ -136,13 +136,42 @@ Custom History API router (no library). The dev server uses `historyApiFallback`
 ### Routes
 
 ```
-/              → redirect to /sync
-/sync          → sync view
-/players       → players view
-/stats         → stats view
-/analysis      → scoreline analysis view
-/replays       → replays list
-/replays/:id   → replay detail
+/                     → redirect to /sync
+/sync                 → sync view
+/players              → players view
+/stats                → stats view
+/analysis             → redirect to /analysis/scoreline
+/analysis/scoreline   → per-scoreline analysis
+/analysis/games       → per-game analysis
+/analysis/correlation → correlation analysis
+/replays              → replays list
+/replays/:id          → replay detail
 ```
 
 Tab clicks call `navigate(path)` which pushes state and dispatches a `route-changed` event. The app shell reads the route on load and on `route-changed` / `popstate` to sync the active tab and subroute. Unknown paths redirect to `/sync`.
+
+### Deep Linking via URL Parameters
+
+All filter and view state is persisted in URL query parameters so any view can be bookmarked or shared. Filter changes use `replaceState` (no history pollution); only path changes (tab/sub-tab) use `pushState`. Default values are omitted from the URL to keep it clean.
+
+**Analysis view params** (shared across scoreline, games, correlation):
+
+| Param | Meaning | Default | Values |
+|-------|---------|---------|--------|
+| `ts`  | team size | `2` | `1`, `2`, `3` |
+| `ez`  | exclude 0-0 games | `1` (on) | `0`, `1` |
+| `es`  | exclude short games | `1` (on) | `0`, `1` |
+| `pl`  | playlist filter keys | `ranked2s,ranked3s` | comma-separated keys from PLAYLIST_OPTIONS |
+| `all` | include all modes | `0` (off) | `0`, `1` |
+| `sort`| sort column | view-specific | `score`, `games`, `date`, `pbb`, `spd`, `dist` |
+| `dir` | sort direction | view-specific | `asc`, `desc` |
+| `stat`| correlation stat (correlation only) | `percent_behind_ball` | stat value strings |
+| `role`| correlation role (correlation only) | `me` | `me`, `teammates`, `opponents` |
+
+**Replays params:**
+
+| Param | Meaning | Default |
+|-------|---------|---------|
+| `p`   | page number (1-based) | `1` |
+
+Switching analysis sub-tabs preserves all query params (filters carry over between views).
