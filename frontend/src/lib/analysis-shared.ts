@@ -149,6 +149,45 @@ export const analysisStyles = css`
     cursor: pointer;
   }
 
+  .playlist-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 1rem;
+  }
+
+  .playlist-filter .playlist-row {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+
+  .playlist-filter label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #a1a1aa;
+    font-size: 0.95rem;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .playlist-filter label.disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .playlist-filter input[type="checkbox"] {
+    accent-color: #3b82f6;
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+  }
+
+  .playlist-filter label.disabled input[type="checkbox"] {
+    cursor: default;
+  }
+
   /* Vertical bar chart cells */
   thead th.bar-header {
     text-align: center;
@@ -354,6 +393,66 @@ export function renderFilterBar(
         <input type="checkbox" .checked=${excludeShort} @change=${toggleShort}>
         Exclude games &lt; 90s
       </label>
+    </div>
+  `;
+}
+
+/** Playlist name mapping for filter checkboxes */
+export const PLAYLIST_OPTIONS = [
+  { key: 'ranked1s', label: 'Ranked 1s', value: 'Ranked Duels' },
+  { key: 'ranked2s', label: 'Ranked 2s', value: 'Ranked Doubles' },
+  { key: 'ranked3s', label: 'Ranked 3s', value: 'Ranked Standard' },
+  { key: 'casual1s', label: 'Casual 1s', value: 'Unranked Duels' },
+  { key: 'casual2s', label: 'Casual 2s', value: 'Unranked Doubles' },
+  { key: 'casual3s', label: 'Casual 3s', value: 'Unranked Standard' },
+] as const;
+
+export type PlaylistState = Record<typeof PLAYLIST_OPTIONS[number]['key'], boolean>;
+
+export const DEFAULT_PLAYLIST_STATE: PlaylistState = {
+  ranked1s: false, ranked2s: true, ranked3s: true,
+  casual1s: false, casual2s: false, casual3s: false,
+};
+
+/** Compute playlist filter values from state. Empty array = no filtering. */
+export function playlistsFromState(state: PlaylistState, allModes: boolean): string[] {
+  if (allModes) return [];
+  return PLAYLIST_OPTIONS
+    .filter(o => state[o.key])
+    .map(o => o.value);
+}
+
+/** Render playlist filter checkboxes */
+export function renderPlaylistFilter(
+  state: PlaylistState,
+  allModes: boolean,
+  toggle: (key: typeof PLAYLIST_OPTIONS[number]['key']) => void,
+  toggleAll: () => void,
+): TemplateResult {
+  const ranked = PLAYLIST_OPTIONS.filter(o => o.key.startsWith('ranked'));
+  const casual = PLAYLIST_OPTIONS.filter(o => o.key.startsWith('casual'));
+  const disabledClass = allModes ? 'disabled' : '';
+
+  const checkbox = (opt: typeof PLAYLIST_OPTIONS[number]) => html`
+    <label class="${disabledClass}">
+      <input type="checkbox"
+        .checked=${allModes || state[opt.key]}
+        ?disabled=${allModes}
+        @change=${() => toggle(opt.key)}>
+      ${opt.label}
+    </label>
+  `;
+
+  return html`
+    <div class="playlist-filter">
+      <div class="playlist-row">
+        ${ranked.map(checkbox)}
+        ${casual.map(checkbox)}
+        <label>
+          <input type="checkbox" .checked=${allModes} @change=${toggleAll}>
+          Include all game modes
+        </label>
+      </div>
     </div>
   `;
 }

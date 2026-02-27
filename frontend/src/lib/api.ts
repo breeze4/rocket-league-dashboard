@@ -299,6 +299,7 @@ export interface AnalysisFilterParams {
   teamSize?: number;
   excludeZeroZero?: boolean;
   minDuration?: number;
+  playlists?: string[];
 }
 
 export function getScorelineStats(params: AnalysisFilterParams = {}) {
@@ -306,6 +307,7 @@ export function getScorelineStats(params: AnalysisFilterParams = {}) {
   if (params.teamSize != null) q.set('team-size', String(params.teamSize));
   if (params.excludeZeroZero) q.set('exclude-zero-zero', 'true');
   if (params.minDuration) q.set('min-duration', String(params.minDuration));
+  if (params.playlists) for (const p of params.playlists) q.append('playlist', p);
   const qs = q.toString();
   return get<ScorelineRow[]>(`/api/stats/scoreline${qs ? '?' + qs : ''}`);
 }
@@ -315,6 +317,7 @@ export function getGameAnalysis(params: AnalysisFilterParams = {}) {
   if (params.teamSize != null) q.set('team-size', String(params.teamSize));
   if (params.excludeZeroZero) q.set('exclude-zero-zero', 'true');
   if (params.minDuration) q.set('min-duration', String(params.minDuration));
+  if (params.playlists) for (const p of params.playlists) q.append('playlist', p);
   const qs = q.toString();
   return get<GameAnalysisRow[]>(`/api/stats/games${qs ? '?' + qs : ''}`);
 }

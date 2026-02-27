@@ -577,6 +577,7 @@ async def stats_scoreline(
     team_size: int | None = Query(None, alias="team-size"),
     exclude_zero_zero: bool = Query(False, alias="exclude-zero-zero"),
     min_duration: int = Query(0, alias="min-duration"),
+    playlists: list[str] = Query([], alias="playlist"),
 ) -> list[ScorelineRow]:
     config = await db.get_player_config()
     if not config.get("me"):
@@ -595,6 +596,9 @@ async def stats_scoreline(
             continue
 
         opp_color = "orange" if my_team == "blue" else "blue"
+
+        if playlists and (replay.get("playlist_name") or "") not in playlists:
+            continue
 
         # Filter by team size if requested
         if team_size is not None:
@@ -689,6 +693,7 @@ async def stats_games(
     team_size: int | None = Query(None, alias="team-size"),
     exclude_zero_zero: bool = Query(False, alias="exclude-zero-zero"),
     min_duration: int = Query(0, alias="min-duration"),
+    playlists: list[str] = Query([], alias="playlist"),
 ) -> list[GameAnalysisRow]:
     config = await db.get_player_config()
     if not config.get("me"):
@@ -705,6 +710,9 @@ async def stats_games(
             continue
 
         opp_color = "orange" if my_team == "blue" else "blue"
+
+        if playlists and (replay.get("playlist_name") or "") not in playlists:
+            continue
 
         if team_size is not None:
             blue_count = len(replay.get("blue", {}).get("players", []))

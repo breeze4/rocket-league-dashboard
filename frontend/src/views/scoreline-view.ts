@@ -3,7 +3,9 @@ import { customElement, state } from 'lit/decorators.js';
 import { getScorelineStats, getGameAnalysis, type ScorelineRow, type GameAnalysisRow } from '../lib/api.js';
 import {
   analysisStyles, computeGlobalRanges, renderBarCell, sortHeader, sortBarHeader,
-  renderModeBar, renderFilterBar, rowClass, formatDate, type SortKey, type SortDir,
+  renderModeBar, renderFilterBar, renderPlaylistFilter, playlistsFromState,
+  rowClass, formatDate, type SortKey, type SortDir,
+  DEFAULT_PLAYLIST_STATE, type PlaylistState, PLAYLIST_OPTIONS,
 } from '../lib/analysis-shared.js';
 
 @customElement('scoreline-view')
@@ -83,6 +85,8 @@ export class ScorelineView extends LitElement {
   @state() private _teamSize = 2;
   @state() private _excludeZeroZero = true;
   @state() private _excludeShort = true;
+  @state() private _playlistState: PlaylistState = { ...DEFAULT_PLAYLIST_STATE };
+  @state() private _allModes = false;
   @state() private _expanded = new Set<string>();
 
   connectedCallback() {
@@ -98,6 +102,7 @@ export class ScorelineView extends LitElement {
       teamSize: this._teamSize,
       excludeZeroZero: this._excludeZeroZero,
       minDuration: this._excludeShort ? 90 : 0,
+      playlists: playlistsFromState(this._playlistState, this._allModes),
     };
     try {
       const [rows, games] = await Promise.all([
@@ -183,6 +188,11 @@ export class ScorelineView extends LitElement {
 
   render() {
     if (this._loading) return html`<p>Loading scoreline data...</p>`;
+    const playlistFilter = renderPlaylistFilter(
+      this._playlistState, this._allModes,
+      (key) => { this._playlistState = { ...this._playlistState, [key]: !this._playlistState[key] }; this._load(); },
+      () => { this._allModes = !this._allModes; this._load(); },
+    );
     const filterBar = renderFilterBar(
       this._excludeZeroZero, this._excludeShort,
       () => { this._excludeZeroZero = !this._excludeZeroZero; this._load(); },
@@ -191,12 +201,14 @@ export class ScorelineView extends LitElement {
 
     if (this._error) return html`
       ${renderModeBar(this._teamSize, (s) => this._setTeamSize(s))}
+      ${playlistFilter}
       ${filterBar}
       <div class="error">${this._error}</div>
       <button @click=${this._load}>Retry</button>
     `;
     if (this._rows.length === 0 && !this._loading) return html`
       ${renderModeBar(this._teamSize, (s) => this._setTeamSize(s))}
+      ${playlistFilter}
       ${filterBar}
       <div class="empty">No replay data for ${this._teamSize}v${this._teamSize}.</div>
     `;
@@ -207,6 +219,7 @@ export class ScorelineView extends LitElement {
 
     return html`
       ${renderModeBar(this._teamSize, (s) => this._setTeamSize(s))}
+      ${playlistFilter}
       ${filterBar}
       <table>
         <colgroup>
