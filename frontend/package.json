@@ -1,0 +1,16 @@
+{
+  "name": "ballchasing-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "rsbuild build"
+  },
+  "dependencies": {
+    "lit": "^3.2.0"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "2.0.0-beta.6",
+    "typescript": "^5.7.0"
+  }
+}
