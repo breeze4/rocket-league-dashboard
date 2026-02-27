@@ -295,16 +295,26 @@ export function getStatsReplays(params: StatsReplayParams = {}) {
   return get<ReplayDetail[]>(`/api/stats/replays${qs ? '?' + qs : ''}`);
 }
 
-export function getScorelineStats(teamSize?: number) {
+export interface AnalysisFilterParams {
+  teamSize?: number;
+  excludeZeroZero?: boolean;
+  minDuration?: number;
+}
+
+export function getScorelineStats(params: AnalysisFilterParams = {}) {
   const q = new URLSearchParams();
-  if (teamSize != null) q.set('team-size', String(teamSize));
+  if (params.teamSize != null) q.set('team-size', String(params.teamSize));
+  if (params.excludeZeroZero) q.set('exclude-zero-zero', 'true');
+  if (params.minDuration) q.set('min-duration', String(params.minDuration));
   const qs = q.toString();
   return get<ScorelineRow[]>(`/api/stats/scoreline${qs ? '?' + qs : ''}`);
 }
 
-export function getGameAnalysis(teamSize?: number) {
+export function getGameAnalysis(params: AnalysisFilterParams = {}) {
   const q = new URLSearchParams();
-  if (teamSize != null) q.set('team-size', String(teamSize));
+  if (params.teamSize != null) q.set('team-size', String(params.teamSize));
+  if (params.excludeZeroZero) q.set('exclude-zero-zero', 'true');
+  if (params.minDuration) q.set('min-duration', String(params.minDuration));
   const qs = q.toString();
   return get<GameAnalysisRow[]>(`/api/stats/games${qs ? '?' + qs : ''}`);
 }

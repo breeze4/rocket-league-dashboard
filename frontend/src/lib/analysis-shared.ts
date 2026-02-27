@@ -125,6 +125,30 @@ export const analysisStyles = css`
     color: #fafafa;
   }
 
+  .filter-bar {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    align-items: center;
+  }
+
+  .filter-bar label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #a1a1aa;
+    font-size: 0.95rem;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .filter-bar input[type="checkbox"] {
+    accent-color: #3b82f6;
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+  }
+
   /* Vertical bar chart cells */
   thead th.bar-header {
     text-align: center;
@@ -309,6 +333,27 @@ export function renderModeBar(
         <button class="mode-btn ${teamSize === s ? 'active' : ''}"
                 @click=${() => setTeamSize(s)}>${s}s</button>
       `)}
+    </div>
+  `;
+}
+
+/** Render filter checkboxes for excluding noise */
+export function renderFilterBar(
+  excludeZeroZero: boolean,
+  excludeShort: boolean,
+  toggleZeroZero: () => void,
+  toggleShort: () => void,
+): TemplateResult {
+  return html`
+    <div class="filter-bar">
+      <label>
+        <input type="checkbox" .checked=${excludeZeroZero} @change=${toggleZeroZero}>
+        Exclude 0-0 games
+      </label>
+      <label>
+        <input type="checkbox" .checked=${excludeShort} @change=${toggleShort}>
+        Exclude games &lt; 90s
+      </label>
     </div>
   `;
 }

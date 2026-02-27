@@ -3,7 +3,7 @@ import { customElement, state } from 'lit/decorators.js';
 import { getGameAnalysis, type GameAnalysisRow } from '../lib/api.js';
 import {
   analysisStyles, computeGlobalRanges, renderBarCell, sortHeader, sortBarHeader,
-  renderModeBar, rowClass, type SortKey, type SortDir,
+  renderModeBar, renderFilterBar, rowClass, type SortKey, type SortDir,
 } from '../lib/analysis-shared.js';
 
 @customElement('game-analysis-view')
@@ -26,6 +26,8 @@ export class GameAnalysisView extends LitElement {
   @state() private _sortKey: SortKey = 'date';
   @state() private _sortDir: SortDir = 'desc';
   @state() private _teamSize = 2;
+  @state() private _excludeZeroZero = true;
+  @state() private _excludeShort = true;
 
   connectedCallback() {
     super.connectedCallback();
@@ -36,7 +38,11 @@ export class GameAnalysisView extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      this._rows = await getGameAnalysis(this._teamSize);
+      this._rows = await getGameAnalysis({
+        teamSize: this._teamSize,
+        excludeZeroZero: this._excludeZeroZero,
+        minDuration: this._excludeShort ? 90 : 0,
+      });
     } catch (e) {
       this._error = String(e);
     }
@@ -102,13 +108,21 @@ export class GameAnalysisView extends LitElement {
 
   render() {
     if (this._loading) return html`<p>Loading game data...</p>`;
+    const filterBar = renderFilterBar(
+      this._excludeZeroZero, this._excludeShort,
+      () => { this._excludeZeroZero = !this._excludeZeroZero; this._load(); },
+      () => { this._excludeShort = !this._excludeShort; this._load(); },
+    );
+
     if (this._error) return html`
       ${renderModeBar(this._teamSize, (s) => this._setTeamSize(s))}
+      ${filterBar}
       <div class="error">${this._error}</div>
       <button @click=${this._load}>Retry</button>
     `;
     if (this._rows.length === 0 && !this._loading) return html`
       ${renderModeBar(this._teamSize, (s) => this._setTeamSize(s))}
+      ${filterBar}
       <div class="empty">No replay data for ${this._teamSize}v${this._teamSize}.</div>
     `;
 
@@ -117,6 +131,7 @@ export class GameAnalysisView extends LitElement {
 
     return html`
       ${renderModeBar(this._teamSize, (s) => this._setTeamSize(s))}
+      ${filterBar}
       <table>
         <colgroup>
           <col class="col-date">

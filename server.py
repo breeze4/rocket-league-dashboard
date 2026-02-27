@@ -575,6 +575,8 @@ async def stats_replays(
 @app.get("/api/stats/scoreline")
 async def stats_scoreline(
     team_size: int | None = Query(None, alias="team-size"),
+    exclude_zero_zero: bool = Query(False, alias="exclude-zero-zero"),
+    min_duration: int = Query(0, alias="min-duration"),
 ) -> list[ScorelineRow]:
     config = await db.get_player_config()
     if not config.get("me"):
@@ -602,8 +604,15 @@ async def stats_scoreline(
             if replay_team_size != team_size:
                 continue
 
+        if min_duration and (replay.get("duration") or 0) < min_duration:
+            continue
+
         my_goals = _safe_get(replay, my_team, "stats", "core", "goals", default=0)
         opp_goals = _safe_get(replay, opp_color, "stats", "core", "goals", default=0)
+
+        if exclude_zero_zero and my_goals == 0 and opp_goals == 0:
+            continue
+
         key = (my_goals, opp_goals)
 
         if key not in buckets:
@@ -678,6 +687,8 @@ async def stats_scoreline(
 @app.get("/api/stats/games")
 async def stats_games(
     team_size: int | None = Query(None, alias="team-size"),
+    exclude_zero_zero: bool = Query(False, alias="exclude-zero-zero"),
+    min_duration: int = Query(0, alias="min-duration"),
 ) -> list[GameAnalysisRow]:
     config = await db.get_player_config()
     if not config.get("me"):
@@ -702,8 +713,14 @@ async def stats_games(
             if replay_team_size != team_size:
                 continue
 
+        if min_duration and (replay.get("duration") or 0) < min_duration:
+            continue
+
         my_goals = _safe_get(replay, my_team, "stats", "core", "goals", default=0)
         opp_goals = _safe_get(replay, opp_color, "stats", "core", "goals", default=0)
+
+        if exclude_zero_zero and my_goals == 0 and opp_goals == 0:
+            continue
 
         me_stats = None
         tm_pbb, tm_spd, tm_dist = [], [], []
