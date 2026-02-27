@@ -129,6 +129,18 @@ class ScorelineRow(BaseModel):
     opponents: ScorelineRoleStats
 
 
+class GameAnalysisRow(BaseModel):
+    id: str
+    date: str
+    my_goals: int
+    opp_goals: int
+    map_name: str | None = None
+    overtime: bool = False
+    me: ScorelineRoleStats
+    teammates: ScorelineRoleStats | None = None
+    opponents: ScorelineRoleStats
+
+
 class ReplaySummary(BaseModel):
     id: str
     title: str | None = None

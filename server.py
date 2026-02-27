@@ -24,6 +24,7 @@ from models import (
     PositioningStats,
     ReplayPlayer,
     ReplaySummary,
+    GameAnalysisRow,
     ScorelineRoleStats,
     ScorelineRow,
     SyncLogEntry,
@@ -696,6 +697,96 @@ async def stats_scoreline(
         ))
 
     rows.sort(key=lambda r: (-r.my_goals, r.opp_goals))
+    return rows
+
+
+@app.get("/api/stats/games")
+async def stats_games(
+    team_size: int | None = Query(None, alias="team-size"),
+) -> list[GameAnalysisRow]:
+    config = await db.get_player_config()
+    if not config.get("me"):
+        raise HTTPException(400, "Player config not set. PUT /api/players/config first.")
+
+    role_lookup = _build_role_lookup(config)
+    replays = await db.all_replay_data()
+    is_1s = team_size == 1
+
+    rows = []
+    for replay in replays:
+        my_team = _find_my_team(replay, role_lookup)
+        if not my_team:
+            continue
+
+        opp_color = "orange" if my_team == "blue" else "blue"
+
+        if team_size is not None:
+            blue_count = len(replay.get("blue", {}).get("players", []))
+            orange_count = len(replay.get("orange", {}).get("players", []))
+            replay_team_size = max(blue_count, orange_count)
+            if replay_team_size != team_size:
+                continue
+
+        my_goals = _safe_get(replay, my_team, "stats", "core", "goals", default=0)
+        opp_goals = _safe_get(replay, opp_color, "stats", "core", "goals", default=0)
+
+        me_stats = None
+        tm_pbb, tm_spd, tm_dist = [], [], []
+        opp_pbb, opp_spd, opp_dist = [], [], []
+
+        for color in (my_team, opp_color):
+            team = replay.get(color, {})
+            is_my_team = color == my_team
+            for player in team.get("players", []):
+                stats = player.get("stats", {})
+                pbb = _safe_get(stats, "positioning", "percent_behind_ball", default=0)
+                spd = _safe_get(stats, "movement", "avg_speed", default=0)
+                dist = _safe_get(stats, "positioning", "avg_distance_to_ball", default=0)
+
+                if is_my_team:
+                    role = role_lookup.get(player.get("name", "").lower())
+                    if role == "me":
+                        me_stats = ScorelineRoleStats(
+                            percent_behind_ball=pbb,
+                            avg_speed=spd,
+                            avg_distance_to_ball=dist,
+                        )
+                    elif not is_1s:
+                        tm_pbb.append(pbb)
+                        tm_spd.append(spd)
+                        tm_dist.append(dist)
+                else:
+                    opp_pbb.append(pbb)
+                    opp_spd.append(spd)
+                    opp_dist.append(dist)
+
+        if me_stats is None:
+            continue
+
+        def _avg(vals: list[float]) -> float:
+            return round(sum(vals) / len(vals), 1) if vals else 0.0
+
+        rows.append(GameAnalysisRow(
+            id=replay.get("id", ""),
+            date=replay.get("date", ""),
+            my_goals=my_goals,
+            opp_goals=opp_goals,
+            map_name=replay.get("map_name"),
+            overtime=replay.get("overtime", False),
+            me=me_stats,
+            teammates=ScorelineRoleStats(
+                percent_behind_ball=_avg(tm_pbb),
+                avg_speed=_avg(tm_spd),
+                avg_distance_to_ball=_avg(tm_dist),
+            ) if not is_1s and tm_pbb else None,
+            opponents=ScorelineRoleStats(
+                percent_behind_ball=_avg(opp_pbb),
+                avg_speed=_avg(opp_spd),
+                avg_distance_to_ball=_avg(opp_dist),
+            ),
+        ))
+
+    rows.sort(key=lambda r: r.date, reverse=True)
     return rows
 
 

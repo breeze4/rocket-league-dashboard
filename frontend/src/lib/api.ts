@@ -140,6 +140,18 @@ export interface ScorelineRow {
   opponents: ScorelineRoleStats;
 }
 
+export interface GameAnalysisRow {
+  id: string;
+  date: string;
+  my_goals: number;
+  opp_goals: number;
+  map_name: string | null;
+  overtime: boolean;
+  me: ScorelineRoleStats;
+  teammates: ScorelineRoleStats | null;
+  opponents: ScorelineRoleStats;
+}
+
 // --- Helpers ---
 
 async function get<T>(url: string): Promise<T> {
@@ -288,4 +300,11 @@ export function getScorelineStats(teamSize?: number) {
   if (teamSize != null) q.set('team-size', String(teamSize));
   const qs = q.toString();
   return get<ScorelineRow[]>(`/api/stats/scoreline${qs ? '?' + qs : ''}`);
+}
+
+export function getGameAnalysis(teamSize?: number) {
+  const q = new URLSearchParams();
+  if (teamSize != null) q.set('team-size', String(teamSize));
+  const qs = q.toString();
+  return get<GameAnalysisRow[]>(`/api/stats/games${qs ? '?' + qs : ''}`);
 }

@@ -6,7 +6,7 @@ import './views/sync-view.js';
 import './views/players-view.js';
 import './views/stats-view.js';
 import './views/replays-view.js';
-import './views/scoreline-view.js';
+import './views/analysis-view.js';
 
 type Tab = 'sync' | 'players' | 'stats' | 'analysis' | 'replays';
 
@@ -103,7 +103,7 @@ export class AppShell extends LitElement {
       case 'sync': return html`<sync-view></sync-view>`;
       case 'players': return html`<players-view></players-view>`;
       case 'stats': return html`<stats-view></stats-view>`;
-      case 'analysis': return html`<scoreline-view></scoreline-view>`;
+      case 'analysis': return html`<analysis-view></analysis-view>`;
       case 'replays': return html`<replays-view .replayId=${this._sub}></replays-view>`;
     }
   }

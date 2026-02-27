@@ -1,23 +1,29 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { getScorelineStats, type ScorelineRow } from '../lib/api.js';
+import { getGameAnalysis, type GameAnalysisRow } from '../lib/api.js';
 import {
   analysisStyles, computeGlobalRanges, renderBarCell, sortHeader, sortBarHeader,
   renderModeBar, rowClass, type SortKey, type SortDir,
 } from '../lib/analysis-shared.js';
 
-@customElement('scoreline-view')
-export class ScorelineView extends LitElement {
+@customElement('game-analysis-view')
+export class GameAnalysisView extends LitElement {
   static styles = [analysisStyles, css`
-    col.col-score { width: 98px; }
-    col.col-games { width: 84px; }
+    col.col-date  { width: 150px; }
+    col.col-score { width: 80px; }
     col.col-stat  { /* takes remaining space equally */ }
+
+    tbody td.date {
+      text-align: left;
+      color: #a1a1aa;
+      font-size: 1.05rem;
+    }
   `];
 
-  @state() private _rows: ScorelineRow[] = [];
+  @state() private _rows: GameAnalysisRow[] = [];
   @state() private _error = '';
   @state() private _loading = true;
-  @state() private _sortKey: SortKey = 'score';
+  @state() private _sortKey: SortKey = 'date';
   @state() private _sortDir: SortDir = 'desc';
   @state() private _teamSize = 2;
 
@@ -30,7 +36,7 @@ export class ScorelineView extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      this._rows = await getScorelineStats(this._teamSize);
+      this._rows = await getGameAnalysis(this._teamSize);
     } catch (e) {
       this._error = String(e);
     }
@@ -52,31 +58,34 @@ export class ScorelineView extends LitElement {
     }
   }
 
-  private _scoreCompare(a: ScorelineRow, b: ScorelineRow, dir: 'desc' | 'asc'): number {
+  private _scoreCompare(a: GameAnalysisRow, b: GameAnalysisRow, dir: 'desc' | 'asc'): number {
     const mul = dir === 'desc' ? -1 : 1;
     if (a.my_goals !== b.my_goals) return (a.my_goals - b.my_goals) * mul;
     if (a.opp_goals !== b.opp_goals) return (a.opp_goals - b.opp_goals) * -mul;
     return 0;
   }
 
-  private get _sortedRows(): ScorelineRow[] {
+  private get _sortedRows(): GameAnalysisRow[] {
     const key = this._sortKey;
     const dir = this._sortDir;
     const mul = dir === 'desc' ? -1 : 1;
     return [...this._rows].sort((a, b) => {
+      if (key === 'date') {
+        return a.date < b.date ? -mul : a.date > b.date ? mul : 0;
+      }
       if (key === 'score') {
         return this._scoreCompare(a, b, dir);
       }
       let va: number, vb: number;
       switch (key) {
-        case 'games': va = a.games; vb = b.games; break;
-        case 'pbb':   va = a.me.percent_behind_ball; vb = b.me.percent_behind_ball; break;
-        case 'spd':   va = a.me.avg_speed; vb = b.me.avg_speed; break;
-        case 'dist':  va = a.me.avg_distance_to_ball; vb = b.me.avg_distance_to_ball; break;
-        default:      va = 0; vb = 0;
+        case 'pbb':  va = a.me.percent_behind_ball; vb = b.me.percent_behind_ball; break;
+        case 'spd':  va = a.me.avg_speed; vb = b.me.avg_speed; break;
+        case 'dist': va = a.me.avg_distance_to_ball; vb = b.me.avg_distance_to_ball; break;
+        default:     va = 0; vb = 0;
       }
       if (va !== vb) return (va - vb) * mul;
-      return this._scoreCompare(a, b, 'desc');
+      // tie-break by date desc
+      return a.date < b.date ? 1 : a.date > b.date ? -1 : 0;
     });
   }
 
@@ -84,8 +93,15 @@ export class ScorelineView extends LitElement {
     return computeGlobalRanges(this._rows);
   }
 
+  private _formatDate(iso: string): string {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      + ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+
   render() {
-    if (this._loading) return html`<p>Loading scoreline data...</p>`;
+    if (this._loading) return html`<p>Loading game data...</p>`;
     if (this._error) return html`
       ${renderModeBar(this._teamSize, (s) => this._setTeamSize(s))}
       <div class="error">${this._error}</div>
@@ -103,16 +119,16 @@ export class ScorelineView extends LitElement {
       ${renderModeBar(this._teamSize, (s) => this._setTeamSize(s))}
       <table>
         <colgroup>
+          <col class="col-date">
           <col class="col-score">
-          <col class="col-games">
           <col class="col-stat">
           <col class="col-stat">
           <col class="col-stat">
         </colgroup>
         <thead>
           <tr>
+            ${sortHeader('Date', 'date', this._sortKey, this._sortDir, toggle, true)}
             ${sortHeader('Score', 'score', this._sortKey, this._sortDir, toggle, true)}
-            ${sortHeader('Games', 'games', this._sortKey, this._sortDir, toggle)}
             ${sortBarHeader('% Behind Ball', 'pbb', this._sortKey, this._sortDir, toggle)}
             ${sortBarHeader('Avg Speed', 'spd', this._sortKey, this._sortDir, toggle)}
             ${sortBarHeader('Avg Distance', 'dist', this._sortKey, this._sortDir, toggle)}
@@ -121,8 +137,8 @@ export class ScorelineView extends LitElement {
         <tbody>
           ${this._sortedRows.map(row => html`
             <tr class="${rowClass(row.my_goals, row.opp_goals)}">
+              <td class="date left">${this._formatDate(row.date)}</td>
               <td class="score">${row.my_goals}-${row.opp_goals}</td>
-              <td class="games">${row.games}</td>
               ${renderBarCell(row, 'pbb', gr)}
               ${renderBarCell(row, 'spd', gr)}
               ${renderBarCell(row, 'dist', gr)}

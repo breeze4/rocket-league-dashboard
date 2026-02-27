@@ -67,11 +67,11 @@ Going with Option A — simpler, no routing changes needed. The wrapper just tog
 
 ## Checklist
 
-- [ ] 1. Add `GameAnalysisRow` model to `models.py`
-- [ ] 2. Add `GET /api/stats/games` endpoint to `server.py` (same pattern as scoreline but per-game, no aggregation across games)
-- [ ] 3. Add `getGameAnalysis()` API function and `GameAnalysisRow` type to `frontend/src/lib/api.ts`
-- [ ] 4. Extract shared analysis CSS and utilities from `scoreline-view.ts` into `frontend/src/lib/analysis-shared.ts`
-- [ ] 5. Refactor `scoreline-view.ts` to import from `analysis-shared.ts` — verify no behavior change
-- [ ] 6. Create `frontend/src/views/game-analysis-view.ts` using shared utilities
-- [ ] 7. Create `frontend/src/views/analysis-view.ts` wrapper with sub-nav toggling between scoreline and game views
-- [ ] 8. Update `app-shell.ts` to render `<analysis-view>` instead of `<scoreline-view>` for the analysis tab
+- [x] 1. Add `GameAnalysisRow` model to `models.py`
+- [x] 2. Add `GET /api/stats/games` endpoint to `server.py` (same pattern as scoreline but per-game, no aggregation across games)
+- [x] 3. Add `getGameAnalysis()` API function and `GameAnalysisRow` type to `frontend/src/lib/api.ts`
+- [x] 4. Extract shared analysis CSS and utilities from `scoreline-view.ts` into `frontend/src/lib/analysis-shared.ts`
+- [x] 5. Refactor `scoreline-view.ts` to import from `analysis-shared.ts` — verify no behavior change
+- [x] 6. Create `frontend/src/views/game-analysis-view.ts` using shared utilities
+- [x] 7. Create `frontend/src/views/analysis-view.ts` wrapper with sub-nav toggling between scoreline and game views
+- [x] 8. Update `app-shell.ts` to render `<analysis-view>` instead of `<scoreline-view>` for the analysis tab
