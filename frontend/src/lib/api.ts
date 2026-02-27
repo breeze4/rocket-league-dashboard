@@ -182,6 +182,24 @@ export function ping() {
   return get<Record<string, unknown>>('/api/ping');
 }
 
+export interface BucketStatus {
+  per_second: number;
+  tokens_available: number;
+  per_hour: number | null;
+  hour_used: number;
+  seconds_until_reset: number;
+}
+
+export interface RateLimitStatus {
+  tier: string;
+  list: BucketStatus;
+  get: BucketStatus;
+}
+
+export function getRateLimits() {
+  return get<RateLimitStatus>('/api/rate-limits');
+}
+
 export interface SyncParams {
   replayDateAfter?: string;
   replayDateBefore?: string;
@@ -320,4 +338,55 @@ export function getGameAnalysis(params: AnalysisFilterParams = {}) {
   if (params.playlists) for (const p of params.playlists) q.append('playlist', p);
   const qs = q.toString();
   return get<GameAnalysisRow[]>(`/api/stats/games${qs ? '?' + qs : ''}`);
+}
+
+// --- Correlation ---
+
+export interface CorrelationPoint {
+  stat_value: number;
+  goal_diff: number;
+  won: boolean;
+}
+
+export interface CorrelationBucket {
+  range_min: number;
+  range_max: number;
+  label: string;
+  games: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  win_rate: number;
+}
+
+export interface RegressionLine {
+  slope: number;
+  intercept: number;
+  r_squared: number;
+}
+
+export interface CorrelationResponse {
+  stat: string;
+  role: string;
+  games: number;
+  points: CorrelationPoint[];
+  buckets: CorrelationBucket[];
+  regression: RegressionLine;
+}
+
+export interface CorrelationParams extends AnalysisFilterParams {
+  stat: string;
+  role?: string;
+}
+
+export function getCorrelationStats(params: CorrelationParams) {
+  const q = new URLSearchParams();
+  q.set('stat', params.stat);
+  if (params.role) q.set('role', params.role);
+  if (params.teamSize != null) q.set('team-size', String(params.teamSize));
+  if (params.excludeZeroZero) q.set('exclude-zero-zero', 'true');
+  if (params.minDuration) q.set('min-duration', String(params.minDuration));
+  if (params.playlists) for (const p of params.playlists) q.append('playlist', p);
+  const qs = q.toString();
+  return get<CorrelationResponse>(`/api/stats/correlation${qs ? '?' + qs : ''}`);
 }

@@ -15,6 +15,9 @@ from ballchasing_client import BallchasingClient
 from models import (
     AggregatedStats,
     BoostStats,
+    CorrelationBucket,
+    CorrelationPoint,
+    CorrelationResponse,
     CoreStats,
     DemoStats,
     MovementStats,
@@ -22,6 +25,8 @@ from models import (
     PlayerFrequency,
     PlayerStats,
     PositioningStats,
+    RateLimitStatus,
+    RegressionLine,
     ReplayPlayer,
     ReplaySummary,
     GameAnalysisRow,
@@ -63,6 +68,9 @@ async def lifespan(app: FastAPI):
     tier = os.environ.get("BALLCHASING_TIER", "gold")
     client = BallchasingClient(token, tier)
     await db.init_db()
+    stale = await db.clean_stale_syncs()
+    if stale:
+        print(f"Cleaned {stale} stale sync(s) from previous run")
     yield
     await client.close()
 
@@ -82,6 +90,14 @@ app.add_middleware(
 @app.get("/api/ping")
 async def ping():
     return await client.ping()
+
+
+# --- Rate Limits ---
+
+
+@app.get("/api/rate-limits")
+async def rate_limits() -> RateLimitStatus:
+    return RateLimitStatus(**client.rate_limit_status())
 
 
 # --- Sync ---
@@ -788,6 +804,196 @@ async def stats_games(
 
     rows.sort(key=lambda r: r.date, reverse=True)
     return rows
+
+
+# --- Correlation ---
+
+# Map stat name -> path within player stats dict
+STAT_PATHS: dict[str, tuple[str, ...]] = {
+    "percent_behind_ball": ("positioning", "percent_behind_ball"),
+    "avg_distance_to_ball": ("positioning", "avg_distance_to_ball"),
+    "time_defensive_third": ("positioning", "time_defensive_third"),
+    "time_offensive_third": ("positioning", "time_offensive_third"),
+    "avg_speed": ("movement", "avg_speed"),
+    "time_supersonic": ("movement", "time_supersonic_speed"),
+    "time_slow_speed": ("movement", "time_slow_speed"),
+    "bpm": ("boost", "bpm"),
+    "avg_boost_amount": ("boost", "avg_amount"),
+    "amount_stolen": ("boost", "amount_stolen"),
+    "percent_zero_boost": ("boost", "percent_zero_boost"),
+    "percent_full_boost": ("boost", "percent_full_boost"),
+    "score": ("core", "score"),
+    "shots": ("core", "shots"),
+    "saves": ("core", "saves"),
+    "shooting_pct": ("core", "shooting_percentage"),
+    "demos_inflicted": ("demo", "inflicted"),
+    "demos_taken": ("demo", "taken"),
+}
+
+
+def _linear_regression(
+    xs: list[float], ys: list[float]
+) -> tuple[float, float, float]:
+    """Least-squares linear regression. Returns (slope, intercept, r_squared)."""
+    n = len(xs)
+    if n < 2:
+        return 0.0, 0.0, 0.0
+    sum_x = sum(xs)
+    sum_y = sum(ys)
+    sum_xy = sum(x * y for x, y in zip(xs, ys))
+    sum_x2 = sum(x * x for x in xs)
+    sum_y2 = sum(y * y for y in ys)
+    denom = n * sum_x2 - sum_x * sum_x
+    if denom == 0:
+        return 0.0, sum_y / n, 0.0
+    slope = (n * sum_xy - sum_x * sum_y) / denom
+    intercept = (sum_y - slope * sum_x) / n
+    # R-squared
+    ss_res = sum((y - (slope * x + intercept)) ** 2 for x, y in zip(xs, ys))
+    mean_y = sum_y / n
+    ss_tot = sum((y - mean_y) ** 2 for y in ys)
+    r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    return slope, intercept, r_squared
+
+
+def _build_buckets(
+    points: list[CorrelationPoint], num_buckets: int = 10
+) -> list[CorrelationBucket]:
+    """Bin points into equal-width buckets by stat_value."""
+    if not points:
+        return []
+    vals = [p.stat_value for p in points]
+    lo, hi = min(vals), max(vals)
+    if lo == hi:
+        hi = lo + 1
+    width = (hi - lo) / num_buckets
+    buckets: list[CorrelationBucket] = []
+    for i in range(num_buckets):
+        rmin = lo + i * width
+        rmax = lo + (i + 1) * width
+        in_bucket = [
+            p for p in points
+            if (rmin <= p.stat_value < rmax) or (i == num_buckets - 1 and p.stat_value == rmax)
+        ]
+        games = len(in_bucket)
+        if games == 0:
+            continue
+        wins = sum(1 for p in in_bucket if p.goal_diff > 0)
+        losses = sum(1 for p in in_bucket if p.goal_diff < 0)
+        draws = games - wins - losses
+        buckets.append(CorrelationBucket(
+            range_min=round(rmin, 1),
+            range_max=round(rmax, 1),
+            label=f"{rmin:.0f}-{rmax:.0f}",
+            games=games,
+            wins=wins,
+            losses=losses,
+            draws=draws,
+            win_rate=round(wins / games * 100, 1),
+        ))
+    return buckets
+
+
+@app.get("/api/stats/correlation")
+async def stats_correlation(
+    stat: str = Query(..., alias="stat"),
+    role: str = Query("me", alias="role"),
+    team_size: int | None = Query(None, alias="team-size"),
+    exclude_zero_zero: bool = Query(False, alias="exclude-zero-zero"),
+    min_duration: int = Query(0, alias="min-duration"),
+    playlists: list[str] = Query([], alias="playlist"),
+) -> CorrelationResponse:
+    if stat not in STAT_PATHS:
+        raise HTTPException(400, f"Unknown stat: {stat}. Valid: {', '.join(sorted(STAT_PATHS))}")
+    if role not in ("me", "teammates", "opponents"):
+        raise HTTPException(400, "role must be one of: me, teammates, opponents")
+
+    config = await db.get_player_config()
+    if not config.get("me"):
+        raise HTTPException(400, "Player config not set. PUT /api/players/config first.")
+
+    role_lookup = _build_role_lookup(config)
+    replays = await db.all_replay_data()
+    stat_path = STAT_PATHS[stat]
+    is_1s = team_size == 1
+
+    points: list[CorrelationPoint] = []
+    for replay in replays:
+        my_team = _find_my_team(replay, role_lookup)
+        if not my_team:
+            continue
+        opp_color = "orange" if my_team == "blue" else "blue"
+
+        if playlists and (replay.get("playlist_name") or "") not in playlists:
+            continue
+        if team_size is not None:
+            blue_count = len(replay.get("blue", {}).get("players", []))
+            orange_count = len(replay.get("orange", {}).get("players", []))
+            if max(blue_count, orange_count) != team_size:
+                continue
+        if min_duration and (replay.get("duration") or 0) < min_duration:
+            continue
+
+        my_goals = _safe_get(replay, my_team, "stats", "core", "goals", default=0)
+        opp_goals = _safe_get(replay, opp_color, "stats", "core", "goals", default=0)
+        if exclude_zero_zero and my_goals == 0 and opp_goals == 0:
+            continue
+
+        # Extract stat values per role
+        if role == "me":
+            for player in replay.get(my_team, {}).get("players", []):
+                if role_lookup.get(player.get("name", "").lower()) == "me":
+                    val = _safe_get(player.get("stats", {}), *stat_path, default=None)
+                    if val is not None:
+                        points.append(CorrelationPoint(
+                            stat_value=float(val),
+                            goal_diff=my_goals - opp_goals,
+                            won=my_goals > opp_goals,
+                        ))
+                    break
+        elif role == "teammates":
+            vals = []
+            for player in replay.get(my_team, {}).get("players", []):
+                if role_lookup.get(player.get("name", "").lower()) != "me":
+                    v = _safe_get(player.get("stats", {}), *stat_path, default=None)
+                    if v is not None:
+                        vals.append(float(v))
+            if vals and not is_1s:
+                points.append(CorrelationPoint(
+                    stat_value=round(sum(vals) / len(vals), 1),
+                    goal_diff=my_goals - opp_goals,
+                    won=my_goals > opp_goals,
+                ))
+        elif role == "opponents":
+            vals = []
+            for player in replay.get(opp_color, {}).get("players", []):
+                v = _safe_get(player.get("stats", {}), *stat_path, default=None)
+                if v is not None:
+                    vals.append(float(v))
+            if vals:
+                points.append(CorrelationPoint(
+                    stat_value=round(sum(vals) / len(vals), 1),
+                    goal_diff=my_goals - opp_goals,
+                    won=my_goals > opp_goals,
+                ))
+
+    # Regression: stat_value vs goal_diff
+    xs = [p.stat_value for p in points]
+    ys = [float(p.goal_diff) for p in points]
+    slope, intercept, r_sq = _linear_regression(xs, ys)
+
+    return CorrelationResponse(
+        stat=stat,
+        role=role,
+        games=len(points),
+        points=points,
+        buckets=_build_buckets(points),
+        regression=RegressionLine(
+            slope=round(slope, 4),
+            intercept=round(intercept, 4),
+            r_squared=round(r_sq, 4),
+        ),
+    )
 
 
 # --- Maps ---

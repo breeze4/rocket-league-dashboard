@@ -2,7 +2,8 @@ import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import {
   startSync, getSyncPreview, getSyncStatus, getSyncHistory, getSyncCoverage,
-  type SyncStatus, type SyncLogEntry, type SyncCoverage,
+  getRateLimits,
+  type SyncStatus, type SyncLogEntry, type SyncCoverage, type RateLimitStatus,
 } from '../lib/api.js';
 
 /** Format YYYY-MM-DD from year/month/day numbers. */
@@ -37,6 +38,15 @@ function dayCellColor(
     return '#172554'; // dim blue tint
   }
   return ''; // default (inherit)
+}
+
+const MONTHS_PER_PAGE = 6;
+
+/** Compute default view start so current month is the last visible month. */
+function defaultViewStart(): { year: number; month: number } {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth() - MONTHS_PER_PAGE + 1, 1);
+  return { year: d.getFullYear(), month: d.getMonth() };
 }
 
 @customElement('sync-view')
@@ -234,6 +244,90 @@ export class SyncView extends LitElement {
     .status-completed { color: #4ade80; }
     .status-failed { color: #ef4444; }
     .status-running { color: #fbbf24; }
+
+    .cal-nav {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .cal-nav button {
+      background: #27272a;
+      border: 1px solid #3f3f46;
+      color: #a1a1aa;
+      border-radius: 0.375rem;
+      padding: 0.25rem 0.75rem;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+
+    .cal-nav button:hover:not(:disabled) {
+      background: #3f3f46;
+      color: #fafafa;
+    }
+
+    .cal-nav button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .cal-nav .range-label {
+      font-size: 0.85rem;
+      color: #a1a1aa;
+      min-width: 160px;
+      text-align: center;
+    }
+
+    .rate-limits {
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 0.375rem;
+      padding: 0.75rem 1.25rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.8rem;
+      color: #a1a1aa;
+    }
+
+    .rate-limits .tier {
+      font-weight: 600;
+      color: #fafafa;
+      text-transform: capitalize;
+    }
+
+    .rate-bucket {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .rate-bucket .bucket-label {
+      color: #71717a;
+      min-width: 2.5rem;
+    }
+
+    .rate-bar-track {
+      width: 100px;
+      height: 6px;
+      background: #27272a;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .rate-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .rate-reset {
+      color: #52525b;
+      font-size: 0.75rem;
+    }
   `;
 
   @state() private _dateAfter = '';
@@ -248,6 +342,9 @@ export class SyncView extends LitElement {
   @state() private _previewCount: number | null = null;
   @state() private _previewing = false;
   @state() private _confirming = false;
+  @state() private _viewYear = defaultViewStart().year;
+  @state() private _viewMonth = defaultViewStart().month;
+  @state() private _rateLimits: RateLimitStatus | null = null;
 
   private _pollTimer?: ReturnType<typeof setInterval>;
 
@@ -256,6 +353,7 @@ export class SyncView extends LitElement {
     this._fetchStatus();
     this._fetchHistory();
     this._fetchCoverage();
+    this._fetchRateLimits();
   }
 
   disconnectedCallback() {
@@ -281,6 +379,7 @@ export class SyncView extends LitElement {
     this._pollTimer = setInterval(() => {
       this._fetchStatus();
       this._fetchCoverage();
+      this._fetchRateLimits();
     }, 1000);
   }
 
@@ -303,6 +402,12 @@ export class SyncView extends LitElement {
   private async _fetchCoverage() {
     try {
       this._coverage = await getSyncCoverage();
+    } catch { /* ignore */ }
+  }
+
+  private async _fetchRateLimits() {
+    try {
+      this._rateLimits = await getRateLimits();
     } catch { /* ignore */ }
   }
 
@@ -379,38 +484,38 @@ export class SyncView extends LitElement {
   }
 
   private _getCalendarMonths(): { year: number; month: number }[] {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-
-    // Find earliest date from replay data or synced ranges
-    let earliest: Date | null = null;
-    if (this._coverage) {
-      for (const d of Object.keys(this._coverage.replay_counts)) {
-        const dt = new Date(d);
-        if (!earliest || dt < earliest) earliest = dt;
-      }
-      for (const r of this._coverage.synced_ranges) {
-        if (r.date_after) {
-          const dt = new Date(r.date_after);
-          if (!earliest || dt < earliest) earliest = dt;
-        }
-      }
-    }
-
-    // Default: 3 months ago
-    const threeMonthsAgo = new Date(currentYear, currentMonth - 3, 1);
-    const start = earliest && earliest < threeMonthsAgo ? earliest : threeMonthsAgo;
-
     const months: { year: number; month: number }[] = [];
-    let y = start.getFullYear();
-    let m = start.getMonth();
-    while (y < currentYear || (y === currentYear && m <= currentMonth)) {
+    let y = this._viewYear;
+    let m = this._viewMonth;
+    for (let i = 0; i < MONTHS_PER_PAGE; i++) {
       months.push({ year: y, month: m });
       m++;
       if (m > 11) { m = 0; y++; }
     }
     return months;
+  }
+
+  private _prevPage() {
+    const d = new Date(this._viewYear, this._viewMonth - MONTHS_PER_PAGE, 1);
+    this._viewYear = d.getFullYear();
+    this._viewMonth = d.getMonth();
+  }
+
+  private _nextPage() {
+    const d = new Date(this._viewYear, this._viewMonth + MONTHS_PER_PAGE, 1);
+    this._viewYear = d.getFullYear();
+    this._viewMonth = d.getMonth();
+  }
+
+  private _goToToday() {
+    const s = defaultViewStart();
+    this._viewYear = s.year;
+    this._viewMonth = s.month;
+  }
+
+  private _isShowingCurrent(): boolean {
+    const s = defaultViewStart();
+    return this._viewYear === s.year && this._viewMonth === s.month;
   }
 
   private _renderMonth(year: number, month: number) {
@@ -471,6 +576,34 @@ export class SyncView extends LitElement {
     `;
   }
 
+  private _renderBucket(label: string, bucket: RateLimitStatus['list']) {
+    if (bucket.per_hour === null) {
+      return html`
+        <div class="rate-bucket">
+          <span class="bucket-label">${label}</span>
+          <span>unlimited</span>
+        </div>
+      `;
+    }
+    const pct = bucket.per_hour > 0 ? (bucket.hour_used / bucket.per_hour) * 100 : 0;
+    const color = pct > 90 ? '#ef4444' : pct > 70 ? '#fbbf24' : '#4ade80';
+    return html`
+      <div class="rate-bucket">
+        <span class="bucket-label">${label}</span>
+        <div class="rate-bar-track">
+          <div class="rate-bar-fill" style="width: ${pct}%; background: ${color};"></div>
+        </div>
+        <span>${bucket.hour_used} / ${bucket.per_hour}</span>
+      </div>
+    `;
+  }
+
+  private _fmtReset(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
   render() {
     const s = this._status;
     const months = this._getCalendarMonths();
@@ -502,9 +635,30 @@ export class SyncView extends LitElement {
         `}
       </div>
 
+      ${this._rateLimits ? html`
+        <div class="rate-limits">
+          <span class="tier">${this._rateLimits.tier}</span>
+          ${this._renderBucket('List', this._rateLimits.list)}
+          ${this._renderBucket('Get', this._rateLimits.get)}
+          ${this._rateLimits.list.per_hour !== null ? html`
+            <span class="rate-reset">Resets in ${this._fmtReset(this._rateLimits.list.seconds_until_reset)}</span>
+          ` : ''}
+        </div>
+      ` : ''}
+
       ${this._coverage ? html`
         <div class="calendar">
           <h3>Coverage</h3>
+          <div class="cal-nav">
+            <button @click=${this._prevPage}>&laquo; Prev</button>
+            <span class="range-label">
+              ${new Date(months[0].year, months[0].month).toLocaleString('default', { month: 'short', year: 'numeric' })}
+              &mdash;
+              ${new Date(months[months.length - 1].year, months[months.length - 1].month).toLocaleString('default', { month: 'short', year: 'numeric' })}
+            </span>
+            <button @click=${this._nextPage} ?disabled=${this._isShowingCurrent()}>Next &raquo;</button>
+            <button @click=${this._goToToday} ?disabled=${this._isShowingCurrent()}>Today</button>
+          </div>
           <div class="calendar-grid">
             ${months.map(m => this._renderMonth(m.year, m.month))}
           </div>

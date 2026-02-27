@@ -63,6 +63,24 @@ class TokenBucket:
 
             await asyncio.sleep(1.0 / self.per_second)
 
+    def snapshot(self) -> dict:
+        """Return current bucket state without acquiring a token."""
+        self._refill()
+        result: dict = {
+            "per_second": self.per_second,
+            "tokens_available": round(self._tokens, 1),
+        }
+        if self.per_hour is not None:
+            elapsed = time.monotonic() - self._hour_start
+            result["per_hour"] = self.per_hour
+            result["hour_used"] = self._hour_tokens
+            result["seconds_until_reset"] = max(0, round(3600 - elapsed))
+        else:
+            result["per_hour"] = None
+            result["hour_used"] = 0
+            result["seconds_until_reset"] = 0
+        return result
+
 
 class BallchasingClient:
     def __init__(self, token: str, tier: str = "gold") -> None:
@@ -75,6 +93,7 @@ class BallchasingClient:
         tier = tier.lower()
         if tier not in RATE_LIMITS:
             tier = "gold"
+        self.tier = tier
         limits = RATE_LIMITS[tier]
         self._list_bucket = TokenBucket(*limits["list"])
         self._get_bucket = TokenBucket(*limits["get"])
@@ -99,6 +118,13 @@ class BallchasingClient:
         resp = await self._client.get(f"/replays/{replay_id}")
         resp.raise_for_status()
         return resp.json()
+
+    def rate_limit_status(self) -> dict:
+        return {
+            "tier": self.tier,
+            "list": self._list_bucket.snapshot(),
+            "get": self._get_bucket.snapshot(),
+        }
 
     async def get_maps(self) -> list:
         await self._get_bucket.acquire()

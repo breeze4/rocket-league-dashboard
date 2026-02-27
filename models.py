@@ -41,6 +41,20 @@ class SyncLogEntry(BaseModel):
     error: str | None = None
 
 
+class BucketStatus(BaseModel):
+    per_second: float
+    tokens_available: float
+    per_hour: int | None = None
+    hour_used: int = 0
+    seconds_until_reset: int = 0
+
+
+class RateLimitStatus(BaseModel):
+    tier: str
+    list: BucketStatus
+    get: BucketStatus
+
+
 class CoreStats(BaseModel):
     shots: int = 0
     shots_against: int = 0
@@ -139,6 +153,38 @@ class GameAnalysisRow(BaseModel):
     me: ScorelineRoleStats
     teammates: ScorelineRoleStats | None = None
     opponents: ScorelineRoleStats
+
+
+class CorrelationPoint(BaseModel):
+    stat_value: float
+    goal_diff: int
+    won: bool
+
+
+class CorrelationBucket(BaseModel):
+    range_min: float
+    range_max: float
+    label: str
+    games: int
+    wins: int
+    losses: int
+    draws: int
+    win_rate: float
+
+
+class RegressionLine(BaseModel):
+    slope: float
+    intercept: float
+    r_squared: float
+
+
+class CorrelationResponse(BaseModel):
+    stat: str
+    role: str
+    games: int
+    points: list[CorrelationPoint]
+    buckets: list[CorrelationBucket]
+    regression: RegressionLine
 
 
 class ReplaySummary(BaseModel):

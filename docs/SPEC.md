@@ -62,6 +62,10 @@ The Analysis tab has two sub-views, toggled via a secondary nav within the tab:
 
 Both views share styling, bar rendering, color ranking, and sort logic via shared utilities to keep code DRY.
 
+**Correlations** — Stat-vs-outcome correlation analysis using D3.js charts. The user picks a stat from a categorized dropdown (positioning, movement, boost, core, demo) and a role (me/teammates/opponents). Two charts render side by side: a scatter plot (stat value vs goal differential, dots colored by win/loss, with a least-squares trend line) and a bucket bar chart (stat ranges on X, win rate 0-100% on Y, bars colored by win rate). Summary line shows total games, r², and overall win rate. Uses the same team-size and playlist filters as other sub-views.
+
+`GET /api/stats/correlation?stat=<name>&role=me&team-size=2` — Returns individual data points, bucketed win rates, and regression coefficients. Stat names map to paths within the replay player stats object (e.g., `percent_behind_ball` -> `stats.positioning.percent_behind_ball`). Bucketing uses ~8-10 equal-width bins across the observed range. Regression is simple least-squares (stat_value vs goal_diff) with r-squared.
+
 `GET /api/stats/games?team-size=N` — Returns per-game analysis rows. Each row contains `id`, `date`, `my_goals`, `opp_goals`, `map_name`, `overtime`, and `ScorelineRoleStats` for me/teammates/opponents. For "me" these are the raw per-player values (no averaging). For teammates and opponents, values are averaged across the team's players.
 
 ## Player Identity Model
@@ -90,6 +94,10 @@ Client-side token-bucket per endpoint group so we never 429. Tier from `.env` (`
 |---|---|---|---|---|---|
 | List replays/groups | 16/s | 8/s | 4/s, 2000/hr | 2/s, 1000/hr | 2/s, 500/hr |
 | Get replay/group | 16/s | 8/s | 4/s, 5000/hr | 2/s, 2000/hr | 2/s, 1000/hr |
+
+### Rate Limit Display
+
+`GET /api/rate-limits` exposes the current state of both token buckets (list and get) without making upstream API calls. Returns tier name, per-second/per-hour limits, current hourly usage, and seconds until the hour window resets. Displayed on the sync page as compact usage bars that auto-refresh during active syncs.
 
 ## Key Decisions
 

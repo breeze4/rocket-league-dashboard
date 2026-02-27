@@ -144,6 +144,21 @@ async def set_player_config(config: dict) -> None:
 # --- Sync log ---
 
 
+async def clean_stale_syncs() -> int:
+    """Mark any 'running' sync_log entries as failed (server crashed mid-sync)."""
+    now = datetime.now(timezone.utc).isoformat()
+    async with aiosqlite.connect(DB_PATH) as conn:
+        cursor = await conn.execute(
+            """UPDATE sync_log
+               SET status = 'failed', error = 'Server restarted during sync',
+                   completed_at = ?
+               WHERE status = 'running'""",
+            (now,),
+        )
+        await conn.commit()
+        return cursor.rowcount
+
+
 async def create_sync_log(date_after: str | None, date_before: str | None) -> int:
     now = datetime.now(timezone.utc).isoformat()
     async with aiosqlite.connect(DB_PATH) as db:
