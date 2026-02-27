@@ -20,13 +20,13 @@ Frontend only: `cd frontend && npm run dev` (serves on :3000, proxies /api to :8
 
 ## Test
 
-All tests: `source venv/bin/activate && pytest`
+All tests: `venv/bin/pytest`
 
-Single file: `pytest tests/test_helpers.py`
+Single file: `venv/bin/pytest tests/test_helpers.py`
 
-Single test: `pytest tests/test_helpers.py::test_build_role_lookup_me`
+Single test: `venv/bin/pytest tests/test_helpers.py::test_build_role_lookup_me`
 
-Verbose: `pytest -v`
+Verbose: `venv/bin/pytest -v`
 
 ## Important constants
 
