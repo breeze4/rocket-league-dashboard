@@ -18,6 +18,16 @@ Frontend only: `cd frontend && npm run dev` (serves on :3000, proxies /api to :8
 - `ballchasing_client.py` — ballchasing.com API client with rate limiting
 - `frontend/` — Lit + Rsbuild SPA
 
+## Test
+
+All tests: `source venv/bin/activate && pytest`
+
+Single file: `pytest tests/test_helpers.py`
+
+Single test: `pytest tests/test_helpers.py::test_build_role_lookup_me`
+
+Verbose: `pytest -v`
+
 ## Important constants
 
 - Uploader ID `76561197971332940` is hardcoded in `server.py`. All syncs filter to this uploader only.
