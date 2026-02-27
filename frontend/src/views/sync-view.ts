@@ -247,6 +247,7 @@ export class SyncView extends LitElement {
   @state() private _selectState: 0 | 1 | 2 = 0;
   @state() private _previewCount: number | null = null;
   @state() private _previewing = false;
+  @state() private _confirming = false;
 
   private _pollTimer?: ReturnType<typeof setInterval>;
 
@@ -320,16 +321,19 @@ export class SyncView extends LitElement {
 
   private async _confirmSync() {
     this._error = '';
-    this._previewCount = null;
+    this._confirming = true;
     try {
       await startSync({
         replayDateAfter: this._dateAfter || undefined,
         replayDateBefore: this._dateBefore || undefined,
       });
+      this._previewCount = null;
       this._startPolling();
       this._fetchStatus();
     } catch (e) {
       this._error = String(e);
+    } finally {
+      this._confirming = false;
     }
   }
 
@@ -483,8 +487,10 @@ export class SyncView extends LitElement {
         ${this._previewCount !== null ? html`
           <div class="field" style="flex-direction: row; align-items: center; gap: 0.75rem;">
             <strong>${this._previewCount} replays</strong> found. Sync?
-            <button @click=${this._confirmSync}>Confirm</button>
-            <button @click=${this._cancelPreview}>Cancel</button>
+            <button @click=${this._confirmSync} ?disabled=${this._confirming}>
+              ${this._confirming ? 'Starting...' : 'Confirm'}
+            </button>
+            <button @click=${this._cancelPreview} ?disabled=${this._confirming}>Cancel</button>
           </div>
         ` : html`
           <button @click=${this._triggerSync} ?disabled=${s?.running || this._previewing}>
