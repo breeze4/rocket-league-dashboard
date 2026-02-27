@@ -136,7 +136,7 @@ export interface ScorelineRow {
   opp_goals: number;
   games: number;
   me: ScorelineRoleStats;
-  teammates: ScorelineRoleStats;
+  teammates: ScorelineRoleStats | null;
   opponents: ScorelineRoleStats;
 }
 
@@ -283,6 +283,9 @@ export function getStatsReplays(params: StatsReplayParams = {}) {
   return get<ReplayDetail[]>(`/api/stats/replays${qs ? '?' + qs : ''}`);
 }
 
-export function getScorelineStats() {
-  return get<ScorelineRow[]>('/api/stats/scoreline');
+export function getScorelineStats(teamSize?: number) {
+  const q = new URLSearchParams();
+  if (teamSize != null) q.set('team-size', String(teamSize));
+  const qs = q.toString();
+  return get<ScorelineRow[]>(`/api/stats/scoreline${qs ? '?' + qs : ''}`);
 }

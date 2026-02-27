@@ -1,119 +1,45 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { getScorelineStats, type ScorelineRow, type ScorelineRoleStats } from '../lib/api.js';
+import { getScorelineStats, type ScorelineRow } from '../lib/api.js';
 
-// stat column keys for color scaling
-type StatCol = 'me.pbb' | 'me.spd' | 'me.dist'
-  | 'tm.pbb' | 'tm.spd' | 'tm.dist'
-  | 'opp.pbb' | 'opp.spd' | 'opp.dist';
-
-const STAT_COLS: StatCol[] = [
-  'me.pbb', 'me.spd', 'me.dist',
-  'tm.pbb', 'tm.spd', 'tm.dist',
-  'opp.pbb', 'opp.spd', 'opp.dist',
-];
-
-function getStatValue(row: ScorelineRow, col: StatCol): number {
-  const [role, field] = col.split('.') as [string, string];
-  const r = role === 'me' ? row.me : role === 'tm' ? row.teammates : row.opponents;
-  switch (field) {
-    case 'pbb': return r.percent_behind_ball;
-    case 'spd': return r.avg_speed;
-    case 'dist': return r.avg_distance_to_ball;
-    default: return 0;
-  }
-}
-
-interface ColRange { min: number; max: number }
-
-function computeRanges(rows: ScorelineRow[]): Map<StatCol, ColRange> {
-  const ranges = new Map<StatCol, ColRange>();
-  for (const col of STAT_COLS) {
-    const vals = rows.map(r => getStatValue(r, col)).filter(v => v > 0);
-    if (vals.length === 0) {
-      ranges.set(col, { min: 0, max: 1 });
-    } else {
-      ranges.set(col, { min: Math.min(...vals), max: Math.max(...vals) });
-    }
-  }
-  return ranges;
-}
-
-// Interpolate: 0 = red, 0.5 = blue (neutral), 1 = green (low alpha for dark theme)
-function heatColor(t: number): string {
-  t = Math.max(0, Math.min(1, t));
-  let r: number, g: number, b: number;
-  if (t < 0.5) {
-    // red (1,0.3,0.3) -> blue (0.3,0.4,0.9)
-    const s = t / 0.5;
-    r = 1 - 0.7 * s;
-    g = 0.3 + 0.1 * s;
-    b = 0.3 + 0.6 * s;
-  } else {
-    // blue (0.3,0.4,0.9) -> green (0.3,0.8,0.3)
-    const s = (t - 0.5) / 0.5;
-    r = 0.3;
-    g = 0.4 + 0.4 * s;
-    b = 0.9 - 0.6 * s;
-  }
-  return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, 0.18)`;
-}
-
-type SortKey = 'score' | 'games'
-  | 'me.pbb' | 'me.spd' | 'me.dist'
-  | 'tm.pbb' | 'tm.spd' | 'tm.dist'
-  | 'opp.pbb' | 'opp.spd' | 'opp.dist';
-
+type SortKey = 'score' | 'games' | 'pbb' | 'spd' | 'dist';
 type SortDir = 'asc' | 'desc';
-
-function getSortValue(row: ScorelineRow, key: SortKey): number {
-  switch (key) {
-    case 'score': return row.my_goals - row.opp_goals;
-    case 'games': return row.games;
-    case 'me.pbb': return row.me.percent_behind_ball;
-    case 'me.spd': return row.me.avg_speed;
-    case 'me.dist': return row.me.avg_distance_to_ball;
-    case 'tm.pbb': return row.teammates.percent_behind_ball;
-    case 'tm.spd': return row.teammates.avg_speed;
-    case 'tm.dist': return row.teammates.avg_distance_to_ball;
-    case 'opp.pbb': return row.opponents.percent_behind_ball;
-    case 'opp.spd': return row.opponents.avg_speed;
-    case 'opp.dist': return row.opponents.avg_distance_to_ball;
-  }
-}
 
 @customElement('scoreline-view')
 export class ScorelineView extends LitElement {
   static styles = css`
-    :host { display: block; }
+    :host {
+      display: block;
+      background: #2a2a2e;
+      padding: 1rem;
+      border-radius: 8px;
+    }
 
-    .error { color: #ef5350; margin-bottom: 1rem; }
+    .error { color: #ef4444; margin-bottom: 1rem; }
 
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.82rem;
+      font-size: 1.15rem;
+      table-layout: fixed;
     }
 
+    col.col-score { width: 98px; }
+    col.col-games { width: 84px; }
+    col.col-stat  { /* takes remaining space equally */ }
+
     thead th {
-      color: #999;
+      color: #a1a1aa;
       font-weight: 600;
       text-transform: uppercase;
-      font-size: 0.7rem;
+      font-size: 0.98rem;
       letter-spacing: 0.04em;
       padding: 0.4rem 0.5rem;
       text-align: right;
-      border-bottom: 2px solid #444;
+      border-bottom: 2px solid #27272a;
     }
 
     thead th.left { text-align: left; }
-
-    thead th.group-header {
-      text-align: center;
-      color: #64b5f6;
-      border-bottom: 1px solid #444;
-      padding-bottom: 0.2rem;
-    }
 
     thead th.sortable {
       cursor: pointer;
@@ -121,48 +47,124 @@ export class ScorelineView extends LitElement {
     }
 
     thead th.sortable:hover {
-      color: #ddd;
+      color: #fafafa;
     }
 
     thead th.sorted {
-      color: #64b5f6;
+      color: #3b82f6;
     }
 
     .sort-arrow {
-      font-size: 0.6rem;
+      font-size: 0.84rem;
       margin-left: 0.15rem;
     }
 
     tbody td {
       padding: 0.35rem 0.5rem;
       text-align: right;
-      color: #ccc;
-      border-bottom: 1px solid #333;
+      color: #a1a1aa;
+      border-bottom: 1px solid #27272a;
     }
 
     tbody td.left { text-align: left; }
 
     tbody td.score {
       font-weight: 700;
-      color: #fff;
+      color: #fafafa;
       text-align: left;
     }
 
     tbody td.games {
-      color: #aaa;
+      color: #71717a;
     }
 
-    tr.win { border-left: 3px solid #4caf50; }
-    tr.loss { border-left: 3px solid #ef5350; }
-    tr.draw { border-left: 3px solid #777; }
+    tr.win { border-left: 3px solid #4ade80; }
+    tr.loss { border-left: 3px solid #ef4444; }
+    tr.draw { border-left: 3px solid #52525b; }
 
-    tr.win td:first-child { color: #81c784; }
-    tr.loss td:first-child { color: #ef9a9a; }
+    tr.win td:first-child { color: #4ade80; }
+    tr.loss td:first-child { color: #fca5a5; }
 
     .empty {
-      color: #777;
+      color: #71717a;
       text-align: center;
       padding: 2rem;
+    }
+
+    .mode-bar {
+      display: flex;
+      gap: 0;
+      margin-bottom: 1rem;
+      border: 1px solid #3f3f46;
+      border-radius: 6px;
+      overflow: hidden;
+      width: fit-content;
+    }
+
+    .mode-btn {
+      padding: 0.4rem 1rem;
+      background: transparent;
+      border: none;
+      color: #a1a1aa;
+      font-size: 1.12rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-right: 1px solid #3f3f46;
+    }
+
+    .mode-btn:last-child { border-right: none; }
+    .mode-btn:hover { background: #27272a; }
+
+    .mode-btn.active {
+      background: #3b82f6;
+      color: #fafafa;
+    }
+
+    /* Vertical bar chart cells */
+    thead th.bar-header {
+      text-align: center;
+      border-left: 2px solid #27272a;
+    }
+
+    td.bar-cell {
+      padding: 0.25rem 0.6rem;
+      text-align: center;
+      border-left: 2px solid #27272a;
+    }
+
+    .bar-group {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 67px;
+    }
+
+    .bar {
+      flex: 1;
+      border-radius: 3px 3px 0 0;
+      min-height: 28px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      padding-bottom: 2px;
+      box-sizing: border-box;
+    }
+
+    /* colors set dynamically via inline style */
+
+    .bar-lbl {
+      font-size: 0.98rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.45);
+      line-height: 1;
+    }
+
+    .bar-val {
+      font-size: 1.19rem;
+      font-weight: 700;
+      color: rgba(255,255,255,0.85);
+      line-height: 1;
     }
   `;
 
@@ -171,6 +173,7 @@ export class ScorelineView extends LitElement {
   @state() private _loading = true;
   @state() private _sortKey: SortKey = 'score';
   @state() private _sortDir: SortDir = 'desc';
+  @state() private _teamSize = 2;
 
   connectedCallback() {
     super.connectedCallback();
@@ -181,11 +184,17 @@ export class ScorelineView extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      this._rows = await getScorelineStats();
+      this._rows = await getScorelineStats(this._teamSize);
     } catch (e) {
       this._error = String(e);
     }
     this._loading = false;
+  }
+
+  private _setTeamSize(size: number) {
+    if (size === this._teamSize) return;
+    this._teamSize = size;
+    this._load();
   }
 
   private _toggleSort(key: SortKey) {
@@ -197,15 +206,9 @@ export class ScorelineView extends LitElement {
     }
   }
 
-  private get _ranges(): Map<StatCol, ColRange> {
-    return computeRanges(this._rows);
-  }
-
   private _scoreCompare(a: ScorelineRow, b: ScorelineRow, dir: 'desc' | 'asc'): number {
     const mul = dir === 'desc' ? -1 : 1;
-    // Primary: my_goals desc (biggest wins first)
     if (a.my_goals !== b.my_goals) return (a.my_goals - b.my_goals) * mul;
-    // Secondary: opp_goals asc (fewest opponent goals first within same my_goals)
     if (a.opp_goals !== b.opp_goals) return (a.opp_goals - b.opp_goals) * -mul;
     return 0;
   }
@@ -218,23 +221,17 @@ export class ScorelineView extends LitElement {
       if (key === 'score') {
         return this._scoreCompare(a, b, dir);
       }
-      const va = getSortValue(a, key);
-      const vb = getSortValue(b, key);
+      let va: number, vb: number;
+      switch (key) {
+        case 'games': va = a.games; vb = b.games; break;
+        case 'pbb':   va = a.me.percent_behind_ball; vb = b.me.percent_behind_ball; break;
+        case 'spd':   va = a.me.avg_speed; vb = b.me.avg_speed; break;
+        case 'dist':  va = a.me.avg_distance_to_ball; vb = b.me.avg_distance_to_ball; break;
+        default:      va = 0; vb = 0;
+      }
       if (va !== vb) return (va - vb) * mul;
-      // Tiebreak: score order desc
       return this._scoreCompare(a, b, 'desc');
     });
-  }
-
-  private _sortHeader2(label: string, key: SortKey, left = false) {
-    const active = this._sortKey === key;
-    const arrow = active ? (this._sortDir === 'desc' ? '\u25BC' : '\u25B2') : '';
-    return html`
-      <th class="sortable ${left ? 'left' : ''} ${active ? 'sorted' : ''}"
-          rowspan="2"
-          @click=${() => this._toggleSort(key)}
-      >${label}<span class="sort-arrow">${arrow}</span></th>
-    `;
   }
 
   private _sortHeader(label: string, key: SortKey, left = false) {
@@ -247,30 +244,113 @@ export class ScorelineView extends LitElement {
     `;
   }
 
-  private _fmt(v: number, suffix = ''): string {
-    return v === 0 ? '-' : v.toFixed(1) + suffix;
-  }
-
-  private _fmtInt(v: number): string {
-    return v === 0 ? '-' : Math.round(v).toString();
-  }
-
-  private _cellBg(value: number, col: StatCol): string {
-    if (value === 0) return '';
-    const range = this._ranges.get(col);
-    if (!range || range.max === range.min) return '';
-    const t = (value - range.min) / (range.max - range.min);
-    return heatColor(t);
-  }
-
-  private _renderRoleStats(s: ScorelineRoleStats, prefix: 'me' | 'tm' | 'opp') {
-    const pbbCol = `${prefix}.pbb` as StatCol;
-    const spdCol = `${prefix}.spd` as StatCol;
-    const distCol = `${prefix}.dist` as StatCol;
+  private _sortBarHeader(label: string, key: SortKey) {
+    const active = this._sortKey === key;
+    const arrow = active ? (this._sortDir === 'desc' ? '\u25BC' : '\u25B2') : '';
     return html`
-      <td style="background:${this._cellBg(s.percent_behind_ball, pbbCol)}">${this._fmt(s.percent_behind_ball, '%')}</td>
-      <td style="background:${this._cellBg(s.avg_speed, spdCol)}">${this._fmtInt(s.avg_speed)}</td>
-      <td style="background:${this._cellBg(s.avg_distance_to_ball, distCol)}">${this._fmtInt(s.avg_distance_to_ball)}</td>
+      <th class="sortable bar-header ${active ? 'sorted' : ''}"
+          @click=${() => this._toggleSort(key)}
+      >${label}<span class="sort-arrow">${arrow}</span></th>
+    `;
+  }
+
+  /** Global min/max for each stat across all rows and all roles */
+  private get _globalRanges(): Record<'pbb' | 'spd' | 'dist', { min: number; max: number }> {
+    const pbb: number[] = [];
+    const spd: number[] = [];
+    const dist: number[] = [];
+    for (const row of this._rows) {
+      const roles = row.teammates
+        ? [row.me, row.teammates, row.opponents]
+        : [row.me, row.opponents];
+      for (const r of roles) {
+        if (r.percent_behind_ball > 0) pbb.push(r.percent_behind_ball);
+        if (r.avg_speed > 0) spd.push(r.avg_speed);
+        if (r.avg_distance_to_ball > 0) dist.push(r.avg_distance_to_ball);
+      }
+    }
+    const range = (vals: number[]) => vals.length
+      ? { min: Math.min(...vals), max: Math.max(...vals) }
+      : { min: 0, max: 1 };
+    return { pbb: range(pbb), spd: range(spd), dist: range(dist) };
+  }
+
+  /** Map 0-1 normalized rank to muted green→amber→red for dark background */
+  private _rankColor(t: number, alpha: number): string {
+    t = Math.max(0, Math.min(1, t));
+    // Darker, muted tones that sit well on charcoal
+    const r = t < 0.5 ? Math.round(45 + 120 * (t / 0.5)) : Math.round(165 + 30 * ((t - 0.5) / 0.5));
+    const g = t < 0.5 ? Math.round(120 + 20 * (t / 0.5)) : Math.round(140 - 80 * ((t - 0.5) / 0.5));
+    const b = t < 0.5 ? Math.round(45 - 10 * (t / 0.5)) : Math.round(35 - 5 * ((t - 0.5) / 0.5));
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
+  private _renderBarCell(row: ScorelineRow, stat: 'pbb' | 'spd' | 'dist') {
+    const hasTm = row.teammates != null;
+    let meVal: number, tmVal: number, oppVal: number;
+    let fmt: (v: number) => string;
+    // pbb: high = good (green), so invert. spd/dist: neutral, high = red.
+    let invert = false;
+    let alpha = 0.45;
+
+    switch (stat) {
+      case 'pbb':
+        meVal = row.me.percent_behind_ball;
+        tmVal = hasTm ? row.teammates!.percent_behind_ball : 0;
+        oppVal = row.opponents.percent_behind_ball;
+        fmt = (v) => v === 0 ? '-' : Math.round(v) + '%';
+        invert = true;
+        alpha = 1;
+        break;
+      case 'spd':
+        meVal = row.me.avg_speed;
+        tmVal = hasTm ? row.teammates!.avg_speed : 0;
+        oppVal = row.opponents.avg_speed;
+        fmt = (v) => v === 0 ? '-' : Math.round(v).toString();
+        break;
+      case 'dist':
+        meVal = row.me.avg_distance_to_ball;
+        tmVal = hasTm ? row.teammates!.avg_distance_to_ball : 0;
+        oppVal = row.opponents.avg_distance_to_ball;
+        fmt = (v) => v === 0 ? '-' : Math.round(v).toString();
+        break;
+    }
+
+    // Color ranking: relative to the 3 values in this cell
+    const vals = hasTm ? [meVal, tmVal, oppVal] : [meVal, oppVal];
+    const cellMin = Math.min(...vals);
+    const cellMax = Math.max(...vals);
+    const cellRange = cellMax - cellMin;
+    const t = (v: number) => {
+      const raw = cellRange > 0 ? (v - cellMin) / cellRange : 0.5;
+      return invert ? 1 - raw : raw;
+    };
+
+    // Bar height: relative to global min/max across all rows
+    const gr = this._globalRanges[stat];
+    const globalRange = gr.max - gr.min;
+    const maxH = 62;
+    const h = (v: number) => {
+      if (v === 0) return 28;
+      const norm = globalRange > 0 ? (v - gr.min) / globalRange : 0.5;
+      return Math.max(28, norm * maxH);
+    };
+
+    const bar = (label: string, val: number) => html`
+      <div class="bar" style="height:${h(val)}px; background:${this._rankColor(t(val), alpha)}">
+        <span class="bar-val">${fmt(val)}</span>
+        <span class="bar-lbl">${label}</span>
+      </div>
+    `;
+
+    return html`
+      <td class="bar-cell">
+        <div class="bar-group">
+          ${bar('Me', meVal)}
+          ${hasTm ? bar('Tm', tmVal) : ''}
+          ${bar('Op', oppVal)}
+        </div>
+      </td>
     `;
   }
 
@@ -283,31 +363,47 @@ export class ScorelineView extends LitElement {
   render() {
     if (this._loading) return html`<p>Loading scoreline data...</p>`;
     if (this._error) return html`
+      <div class="mode-bar">
+        ${([1,2,3] as const).map(s => html`
+          <button class="mode-btn ${this._teamSize === s ? 'active' : ''}"
+                  @click=${() => this._setTeamSize(s)}>${s}s</button>
+        `)}
+      </div>
       <div class="error">${this._error}</div>
       <button @click=${this._load}>Retry</button>
     `;
-    if (this._rows.length === 0) return html`<div class="empty">No replay data. Sync some replays and configure your player identity first.</div>`;
+    if (this._rows.length === 0 && !this._loading) return html`
+      <div class="mode-bar">
+        ${([1,2,3] as const).map(s => html`
+          <button class="mode-btn ${this._teamSize === s ? 'active' : ''}"
+                  @click=${() => this._setTeamSize(s)}>${s}s</button>
+        `)}
+      </div>
+      <div class="empty">No replay data for ${this._teamSize}v${this._teamSize}.</div>
+    `;
 
     return html`
+      <div class="mode-bar">
+        ${([1,2,3] as const).map(s => html`
+          <button class="mode-btn ${this._teamSize === s ? 'active' : ''}"
+                  @click=${() => this._setTeamSize(s)}>${s}s</button>
+        `)}
+      </div>
       <table>
+        <colgroup>
+          <col class="col-score">
+          <col class="col-games">
+          <col class="col-stat">
+          <col class="col-stat">
+          <col class="col-stat">
+        </colgroup>
         <thead>
           <tr>
-            ${this._sortHeader2('Score', 'score', true)}
-            ${this._sortHeader2('Games', 'games')}
-            <th class="group-header" colspan="3">Me</th>
-            <th class="group-header" colspan="3">Teammates</th>
-            <th class="group-header" colspan="3">Opponents</th>
-          </tr>
-          <tr>
-            ${this._sortHeader('%Behind', 'me.pbb')}
-            ${this._sortHeader('Speed', 'me.spd')}
-            ${this._sortHeader('Dist', 'me.dist')}
-            ${this._sortHeader('%Behind', 'tm.pbb')}
-            ${this._sortHeader('Speed', 'tm.spd')}
-            ${this._sortHeader('Dist', 'tm.dist')}
-            ${this._sortHeader('%Behind', 'opp.pbb')}
-            ${this._sortHeader('Speed', 'opp.spd')}
-            ${this._sortHeader('Dist', 'opp.dist')}
+            ${this._sortHeader('Score', 'score', true)}
+            ${this._sortHeader('Games', 'games')}
+            ${this._sortBarHeader('% Behind Ball', 'pbb')}
+            ${this._sortBarHeader('Avg Speed', 'spd')}
+            ${this._sortBarHeader('Avg Distance', 'dist')}
           </tr>
         </thead>
         <tbody>
@@ -315,9 +411,9 @@ export class ScorelineView extends LitElement {
             <tr class="${this._rowClass(row)}">
               <td class="score">${row.my_goals}-${row.opp_goals}</td>
               <td class="games">${row.games}</td>
-              ${this._renderRoleStats(row.me, 'me')}
-              ${this._renderRoleStats(row.teammates, 'tm')}
-              ${this._renderRoleStats(row.opponents, 'opp')}
+              ${this._renderBarCell(row, 'pbb')}
+              ${this._renderBarCell(row, 'spd')}
+              ${this._renderBarCell(row, 'dist')}
             </tr>
           `)}
         </tbody>

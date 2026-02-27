@@ -4,6 +4,7 @@ import asyncio
 import os
 from collections import Counter
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
@@ -32,6 +33,29 @@ from models import (
 load_dotenv()
 
 UPLOADER_ID = "76561197971332940"
+
+
+def _local_tz_suffix() -> str:
+    """Return the local timezone offset as +HH:MM or -HH:MM."""
+    offset = datetime.now().astimezone().strftime("%z")  # e.g. "-0800"
+    return offset[:3] + ":" + offset[3:]  # e.g. "-08:00"
+
+
+def _normalize_date(value: str | None, end_of_day: bool = False) -> str | None:
+    """Expand date-only strings to full timestamps in local timezone."""
+    if value is None:
+        return None
+    if "T" not in value:
+        tz = _local_tz_suffix()
+        return value + ("T23:59:59" if end_of_day else "T00:00:00") + tz
+    return value
+
+
+def _to_utc(iso: str) -> str:
+    """Convert any ISO timestamp to UTC with Z suffix."""
+    dt = datetime.fromisoformat(iso)
+    utc = dt.astimezone(timezone.utc)
+    return utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 client: BallchasingClient
 sync_status = SyncStatus(running=False)
@@ -74,10 +98,12 @@ async def sync_preview(
     replay_date_before: str | None = Query(None, alias="replay-date-before"),
 ):
     params: dict = {"count": 1, "uploader": UPLOADER_ID}
-    if replay_date_after:
-        params["replay-date-after"] = replay_date_after if "T" in replay_date_after else replay_date_after + "T00:00:00Z"
-    if replay_date_before:
-        params["replay-date-before"] = replay_date_before if "T" in replay_date_before else replay_date_before + "T23:59:59Z"
+    date_after = _normalize_date(replay_date_after, end_of_day=False)
+    date_before = _normalize_date(replay_date_before, end_of_day=True)
+    if date_after:
+        params["replay-date-after"] = date_after
+    if date_before:
+        params["replay-date-before"] = date_before
     page = await client.list_replays(**params)
     return {"total": page.get("count", 0)}
 
@@ -91,12 +117,18 @@ async def sync_replays(
     if sync_status.running:
         raise HTTPException(409, "Sync already in progress")
 
-    covering = await db.find_covering_sync(replay_date_after, replay_date_before)
+    date_after = _normalize_date(replay_date_after, end_of_day=False)
+    date_before = _normalize_date(replay_date_before, end_of_day=True)
+
+    # Coverage check uses UTC for consistent comparison with stored bounds
+    coverage_after = _to_utc(date_after) if date_after else None
+    coverage_before = _to_utc(date_before) if date_before else None
+    covering = await db.find_covering_sync(coverage_after, coverage_before)
     if covering:
         return {"message": "Already synced", "covered_by": covering}
 
     sync_status = SyncStatus(running=True)
-    asyncio.create_task(_do_sync(replay_date_after, replay_date_before))
+    asyncio.create_task(_do_sync(date_after, date_before))
     return {"message": "Sync started"}
 
 
@@ -129,12 +161,14 @@ async def _do_sync(
     try:
         params: dict = {"count": 200, "sort-by": "replay-date", "sort-dir": "desc", "uploader": UPLOADER_ID}
         if date_after:
-            params["replay-date-after"] = date_after if "T" in date_after else date_after + "T00:00:00Z"
+            params["replay-date-after"] = date_after
         if date_before:
-            params["replay-date-before"] = date_before if "T" in date_before else date_before + "T23:59:59Z"
+            params["replay-date-before"] = date_before
 
         next_url: str | None = None
         first_page = True
+        newest_replay_utc: str | None = None
+        oldest_replay_utc: str | None = None
 
         while True:
             if first_page:
@@ -148,6 +182,14 @@ async def _do_sync(
             sync_status.replays_found += len(replay_list)
 
             for replay_summary in replay_list:
+                replay_date = replay_summary.get("date")
+                if replay_date:
+                    utc_date = _to_utc(replay_date)
+                    if newest_replay_utc is None or utc_date > newest_replay_utc:
+                        newest_replay_utc = utc_date
+                    if oldest_replay_utc is None or utc_date < oldest_replay_utc:
+                        oldest_replay_utc = utc_date
+
                 rid = replay_summary["id"]
                 if await db.replay_exists(rid):
                     sync_status.replays_skipped += 1
@@ -175,6 +217,8 @@ async def _do_sync(
             log_id, "completed",
             sync_status.replays_found, sync_status.replays_fetched,
             sync_status.replays_skipped,
+            actual_date_after=oldest_replay_utc,
+            actual_date_before=newest_replay_utc,
         )
     except Exception as e:
         sync_status.error = str(e)
@@ -373,6 +417,7 @@ def _average_stats(agg: AggregatedStats) -> None:
     if agg.core.shots > 0:
         agg.core.shooting_percentage = round(agg.core.goals / agg.core.shots * 100, 1)
     # Average the per-game metrics
+    agg.core.score = round(agg.core.score / n, 1)
     agg.boost.bpm = round(agg.boost.bpm / n, 1)
     agg.boost.bcpm = round(agg.boost.bcpm / n, 1)
     agg.boost.avg_amount = round(agg.boost.avg_amount / n, 1)
@@ -552,13 +597,16 @@ async def stats_replays(
 
 
 @app.get("/api/stats/scoreline")
-async def stats_scoreline() -> list[ScorelineRow]:
+async def stats_scoreline(
+    team_size: int | None = Query(None, alias="team-size"),
+) -> list[ScorelineRow]:
     config = await db.get_player_config()
     if not config.get("me"):
         raise HTTPException(400, "Player config not set. PUT /api/players/config first.")
 
     role_lookup = _build_role_lookup(config)
     replays = await db.all_replay_data()
+    is_1s = team_size == 1
 
     # Accumulators: (my_goals, opp_goals) -> {role: {field: [values]}}
     buckets: dict[tuple[int, int], dict[str, dict[str, list[float]]]] = {}
@@ -569,16 +617,27 @@ async def stats_scoreline() -> list[ScorelineRow]:
             continue
 
         opp_color = "orange" if my_team == "blue" else "blue"
+
+        # Filter by team size if requested
+        if team_size is not None:
+            blue_count = len(replay.get("blue", {}).get("players", []))
+            orange_count = len(replay.get("orange", {}).get("players", []))
+            replay_team_size = max(blue_count, orange_count)
+            if replay_team_size != team_size:
+                continue
+
         my_goals = _safe_get(replay, my_team, "stats", "core", "goals", default=0)
         opp_goals = _safe_get(replay, opp_color, "stats", "core", "goals", default=0)
         key = (my_goals, opp_goals)
 
         if key not in buckets:
-            buckets[key] = {
+            bucket_roles: dict[str, dict[str, list[float]]] = {
                 "me": {"pbb": [], "spd": [], "dist": []},
-                "teammates": {"pbb": [], "spd": [], "dist": []},
                 "opponents": {"pbb": [], "spd": [], "dist": []},
             }
+            if not is_1s:
+                bucket_roles["teammates"] = {"pbb": [], "spd": [], "dist": []}
+            buckets[key] = bucket_roles
 
         for color in (my_team, opp_color):
             team = replay.get(color, {})
@@ -593,6 +652,8 @@ async def stats_scoreline() -> list[ScorelineRow]:
                     role = role_lookup.get(player.get("name", "").lower())
                     if role == "me":
                         bucket_key = "me"
+                    elif is_1s:
+                        continue
                     else:
                         bucket_key = "teammates"
                 else:
@@ -611,6 +672,8 @@ async def stats_scoreline() -> list[ScorelineRow]:
         games = len(me_data["pbb"])  # one entry per game for "me"
         if games == 0:
             continue
+
+        tm_data = data.get("teammates")
         rows.append(ScorelineRow(
             my_goals=mg,
             opp_goals=og,
@@ -621,10 +684,10 @@ async def stats_scoreline() -> list[ScorelineRow]:
                 avg_distance_to_ball=_avg(me_data["dist"]),
             ),
             teammates=ScorelineRoleStats(
-                percent_behind_ball=_avg(data["teammates"]["pbb"]),
-                avg_speed=_avg(data["teammates"]["spd"]),
-                avg_distance_to_ball=_avg(data["teammates"]["dist"]),
-            ),
+                percent_behind_ball=_avg(tm_data["pbb"]),
+                avg_speed=_avg(tm_data["spd"]),
+                avg_distance_to_ball=_avg(tm_data["dist"]),
+            ) if tm_data else None,
             opponents=ScorelineRoleStats(
                 percent_behind_ball=_avg(data["opponents"]["pbb"]),
                 avg_speed=_avg(data["opponents"]["spd"]),

@@ -48,6 +48,22 @@ The `/api/stats/scoreline` endpoint buckets all replays by normalized scoreline 
 
 Rows are sorted by goal differential descending (biggest wins first), then by my_goals descending. The frontend "Analysis" tab renders this as a table with green-tinted win rows and red-tinted loss rows.
 
+### Team Size Filter
+
+The scoreline endpoint accepts an optional `team-size` query parameter (1, 2, or 3). When provided, only replays matching that team size are included (determined by `max(len(blue.players), len(orange.players))`). For 1v1 (`team-size=1`), the `teammates` field is omitted from the response (null) and the frontend renders only Me/Op bars instead of Me/Tm/Op. The frontend defaults to 2s and provides a segmented control (1s | 2s | 3s) above the table.
+
+### Analysis Sub-Views
+
+The Analysis tab has two sub-views, toggled via a secondary nav within the tab:
+
+**Per Scoreline** — The existing scoreline aggregation view. Groups replays by final score and averages positioning/speed stats per role.
+
+**Per Game** — Individual game stats shown chronologically (most recent first). Each row is a single replay with the same three bar-chart stats (% Behind Ball, Avg Speed, Avg Distance) broken down by Me/Tm/Op. Columns: Date, Score, plus the three stat bar columns. Sortable by date, score, or any stat column. Uses the same team-size filter.
+
+Both views share styling, bar rendering, color ranking, and sort logic via shared utilities to keep code DRY.
+
+`GET /api/stats/games?team-size=N` — Returns per-game analysis rows. Each row contains `id`, `date`, `my_goals`, `opp_goals`, `map_name`, `overtime`, and `ScorelineRoleStats` for me/teammates/opponents. For "me" these are the raw per-player values (no averaging). For teammates and opponents, values are averaged across the team's players.
+
 ## Player Identity Model
 
 After initial sync, the user hits `/api/players` to see every player name that appears in their replays, sorted by appearance count. The user (appearing most, under multiple names) will be obvious. Their 3 teammates will also be high-frequency.

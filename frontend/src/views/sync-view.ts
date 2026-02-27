@@ -34,7 +34,7 @@ function dayCellColor(
     return `rgb(30, ${g}, 60)`;
   }
   if (isCovered(dateStr, ranges)) {
-    return '#1e2d4a'; // dim blue tint
+    return '#172554'; // dim blue tint
   }
   return ''; // default (inherit)
 }
@@ -60,20 +60,20 @@ export class SyncView extends LitElement {
 
     .field label {
       font-size: 0.8rem;
-      color: #aaa;
+      color: #a1a1aa;
     }
 
     .status-card {
-      background: #2a2a4a;
-      border: 1px solid #444;
-      border-radius: 6px;
-      padding: 1rem 1.25rem;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 0.375rem;
+      padding: 1rem 1.5rem;
     }
 
     .status-card h3 {
       margin-bottom: 0.5rem;
       font-size: 0.95rem;
-      color: #aaa;
+      color: #a1a1aa;
     }
 
     .metrics {
@@ -89,22 +89,22 @@ export class SyncView extends LitElement {
     .metric .value {
       font-size: 1.6rem;
       font-weight: 700;
-      color: #fff;
+      color: #fafafa;
     }
 
     .metric .label {
       font-size: 0.75rem;
-      color: #888;
+      color: #71717a;
     }
 
-    .running { color: #ffd54f; }
-    .error { color: #ef5350; margin-top: 0.75rem; }
-    .idle { color: #81c784; }
+    .running { color: #fbbf24; }
+    .error { color: #ef4444; margin-top: 0.75rem; }
+    .idle { color: #4ade80; }
 
     /* Calendar */
     .calendar { margin-bottom: 1.5rem; }
     .calendar h3 {
-      color: #aaa;
+      color: #a1a1aa;
       font-size: 0.95rem;
       margin-bottom: 0.75rem;
     }
@@ -121,7 +121,7 @@ export class SyncView extends LitElement {
 
     .month-label {
       font-size: 0.8rem;
-      color: #888;
+      color: #71717a;
       margin-bottom: 0.35rem;
       font-weight: 600;
     }
@@ -134,7 +134,7 @@ export class SyncView extends LitElement {
 
     .dow {
       font-size: 0.65rem;
-      color: #666;
+      color: #52525b;
       text-align: center;
       padding: 0 0 2px;
     }
@@ -145,9 +145,9 @@ export class SyncView extends LitElement {
       align-items: center;
       justify-content: center;
       font-size: 0.7rem;
-      color: #999;
-      background: #1a1a2e;
-      border-radius: 3px;
+      color: #a1a1aa;
+      background: #18181b;
+      border-radius: 0.375rem;
       cursor: pointer;
       position: relative;
       user-select: none;
@@ -155,7 +155,7 @@ export class SyncView extends LitElement {
     }
 
     .day:hover {
-      outline: 1px solid #64b5f6;
+      outline: 1px solid #3b82f6;
       z-index: 1;
     }
 
@@ -168,7 +168,7 @@ export class SyncView extends LitElement {
     }
 
     .day.future {
-      color: #444;
+      color: #3f3f46;
       cursor: default;
     }
     .day.future:hover {
@@ -176,13 +176,13 @@ export class SyncView extends LitElement {
     }
 
     .day.selected {
-      outline: 2px solid #64b5f6;
+      outline: 2px solid #3b82f6;
       z-index: 2;
     }
 
     .day.in-range {
-      outline: 1px solid rgba(100, 181, 246, 0.4);
-      box-shadow: inset 0 0 0 1px rgba(100, 181, 246, 0.15);
+      outline: 1px solid rgba(59, 130, 246, 0.4);
+      box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.15);
     }
 
     .day .count {
@@ -198,7 +198,7 @@ export class SyncView extends LitElement {
       gap: 1rem;
       margin-top: 0.5rem;
       font-size: 0.7rem;
-      color: #888;
+      color: #71717a;
     }
 
     .legend-item {
@@ -210,11 +210,11 @@ export class SyncView extends LitElement {
     .legend-swatch {
       width: 12px;
       height: 12px;
-      border-radius: 2px;
+      border-radius: 0.375rem;
     }
 
     .history { margin-top: 2rem; }
-    .history h3 { color: #aaa; font-size: 0.95rem; margin-bottom: 0.75rem; }
+    .history h3 { color: #a1a1aa; font-size: 0.95rem; margin-bottom: 0.75rem; }
 
     table {
       width: 100%;
@@ -225,15 +225,15 @@ export class SyncView extends LitElement {
     th, td {
       padding: 0.5rem 0.75rem;
       text-align: left;
-      border-bottom: 1px solid #333;
+      border-bottom: 1px solid #27272a;
     }
 
-    th { color: #888; font-weight: 600; }
-    td { color: #ccc; }
+    th { color: #71717a; font-weight: 600; }
+    td { color: #a1a1aa; }
 
-    .status-completed { color: #81c784; }
-    .status-failed { color: #ef5350; }
-    .status-running { color: #ffd54f; }
+    .status-completed { color: #4ade80; }
+    .status-failed { color: #ef4444; }
+    .status-running { color: #fbbf24; }
   `;
 
   @state() private _dateAfter = '';
@@ -501,11 +501,11 @@ export class SyncView extends LitElement {
           </div>
           <div class="legend">
             <div class="legend-item">
-              <div class="legend-swatch" style="background: #1a1a2e; border: 1px solid #333;"></div>
+              <div class="legend-swatch" style="background: #18181b; border: 1px solid #27272a;"></div>
               Not synced
             </div>
             <div class="legend-item">
-              <div class="legend-swatch" style="background: #1e2d4a;"></div>
+              <div class="legend-swatch" style="background: #172554;"></div>
               Synced, no replays
             </div>
             <div class="legend-item">

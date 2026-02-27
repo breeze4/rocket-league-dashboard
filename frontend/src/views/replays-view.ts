@@ -15,7 +15,7 @@ export class ReplaysView extends LitElement {
       margin-bottom: 1rem;
     }
 
-    .pagination span { color: #aaa; font-size: 0.85rem; }
+    .pagination span { color: #a1a1aa; font-size: 0.85rem; }
 
     .replay-list {
       display: flex;
@@ -24,10 +24,10 @@ export class ReplaysView extends LitElement {
     }
 
     .replay {
-      background: #2a2a4a;
-      border: 1px solid #444;
-      border-radius: 6px;
-      padding: 0.75rem 1rem;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 0.375rem;
+      padding: 1rem 1.5rem;
     }
 
     .replay-header {
@@ -41,12 +41,12 @@ export class ReplaysView extends LitElement {
 
     .replay-title {
       font-weight: 600;
-      color: #fff;
+      color: #fafafa;
     }
 
     .replay-meta {
       font-size: 0.8rem;
-      color: #888;
+      color: #71717a;
       display: flex;
       gap: 0.75rem;
     }
@@ -56,18 +56,18 @@ export class ReplaysView extends LitElement {
       font-size: 1rem;
     }
 
-    .score .blue { color: #64b5f6; }
-    .score .orange { color: #ffb74d; }
-    .score .sep { color: #666; margin: 0 0.2em; }
-    .overtime { color: #ffd54f; font-size: 0.75rem; }
+    .score .blue { color: #60a5fa; }
+    .score .orange { color: #fb923c; }
+    .score .sep { color: #52525b; margin: 0 0.2em; }
+    .overtime { color: #fbbf24; font-size: 0.75rem; }
 
-    .win { border-left: 3px solid #81c784; }
-    .loss { border-left: 3px solid #ef5350; }
+    .win { border-left: 3px solid #4ade80; }
+    .loss { border-left: 3px solid #ef4444; }
 
     .players-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 0.3rem 1.5rem;
+      gap: 0.25rem 1.5rem;
     }
 
     @media (max-width: 600px) {
@@ -78,13 +78,13 @@ export class ReplaysView extends LitElement {
       font-size: 0.75rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      padding-bottom: 0.2rem;
-      border-bottom: 1px solid #333;
-      margin-bottom: 0.2rem;
+      padding-bottom: 0.25rem;
+      border-bottom: 1px solid #27272a;
+      margin-bottom: 0.25rem;
     }
 
-    .team-label.blue { color: #64b5f6; }
-    .team-label.orange { color: #ffb74d; }
+    .team-label.blue { color: #60a5fa; }
+    .team-label.orange { color: #fb923c; }
 
     .player-row {
       display: flex;
@@ -93,17 +93,17 @@ export class ReplaysView extends LitElement {
       padding: 0.1rem 0;
     }
 
-    .player-name { color: #ddd; }
+    .player-name { color: #fafafa; }
     .player-role {
       font-size: 0.75rem;
       padding: 0.1em 0.4em;
-      border-radius: 3px;
+      border-radius: 0.375rem;
       font-weight: 500;
     }
 
-    .role-me { background: #2e7d32; color: #c8e6c9; }
-    .role-teammate { background: #1565c0; color: #bbdefb; }
-    .role-opponent { background: #5d4037; color: #d7ccc8; }
+    .role-me { background: #14532d; color: #86efac; }
+    .role-teammate { background: #1e3a5f; color: #93c5fd; }
+    .role-opponent { background: #44403c; color: #d6d3d1; }
 
     .replay-link {
       display: block;
@@ -113,21 +113,21 @@ export class ReplaysView extends LitElement {
     }
 
     .replay-link:hover .replay {
-      border-color: #666;
+      border-color: #3f3f46;
     }
 
     .back-link {
       display: inline-block;
-      color: #8888cc;
+      color: #3b82f6;
       cursor: pointer;
       margin-bottom: 1rem;
       font-size: 0.9rem;
     }
 
-    .back-link:hover { color: #aaa; }
+    .back-link:hover { color: #60a5fa; }
 
-    .empty { color: #666; font-style: italic; }
-    .error { color: #ef5350; }
+    .empty { color: #52525b; font-style: italic; }
+    .error { color: #ef4444; }
   `;
 
   private static PAGE_SIZE = 50;

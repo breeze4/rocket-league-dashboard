@@ -23,9 +23,9 @@ export class AppShell extends LitElement {
   static styles = css`
     :host {
       display: block;
-      max-width: 960px;
+      max-width: 1100px;
       margin: 0 auto;
-      padding: 1rem;
+      padding: 1.5rem 0;
     }
 
     header {
@@ -33,12 +33,14 @@ export class AppShell extends LitElement {
       align-items: center;
       gap: 1rem;
       margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid #27272a;
     }
 
     h1 {
       font-size: 1.3rem;
       font-weight: 700;
-      color: #fff;
+      color: #fafafa;
       margin-right: auto;
     }
 
@@ -48,25 +50,26 @@ export class AppShell extends LitElement {
     }
 
     nav button {
-      padding: 0.4em 1em;
-      border: 1px solid #444;
-      background: #2a2a4a;
-      color: #aaa;
-      border-radius: 4px 4px 0 0;
+      padding: 0.5rem 1rem;
+      border: none;
+      background: transparent;
+      color: #a1a1aa;
+      border-radius: 0.375rem;
       font-weight: 500;
+      font-size: 0.875rem;
+    }
+
+    nav button:hover {
+      background: #27272a;
+      color: #fafafa;
     }
 
     nav button[aria-selected="true"] {
-      background: #3a3a6a;
-      color: #fff;
-      border-bottom-color: #3a3a6a;
+      background: #27272a;
+      color: #fafafa;
     }
 
     main {
-      background: #22223a;
-      border: 1px solid #333;
-      border-radius: 0 4px 4px 4px;
-      padding: 1.5rem;
       min-height: 400px;
     }
   `;

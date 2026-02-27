@@ -163,6 +163,8 @@ async def complete_sync_log(
     replays_fetched: int,
     replays_skipped: int,
     error: str | None = None,
+    actual_date_after: str | None = None,
+    actual_date_before: str | None = None,
 ) -> None:
     now = datetime.now(timezone.utc).isoformat()
     async with aiosqlite.connect(DB_PATH) as db:
@@ -174,6 +176,18 @@ async def complete_sync_log(
                WHERE id = ?""",
             (now, status, replays_found, replays_fetched, replays_skipped, error, log_id),
         )
+        # Tighten date bounds to actual replay timestamps so same-day
+        # re-syncs aren't blocked by end-of-day coverage.
+        if actual_date_after is not None:
+            await db.execute(
+                "UPDATE sync_log SET date_after = ? WHERE id = ?",
+                (actual_date_after, log_id),
+            )
+        if actual_date_before is not None:
+            await db.execute(
+                "UPDATE sync_log SET date_before = ? WHERE id = ?",
+                (actual_date_before, log_id),
+            )
         await db.commit()
 
 

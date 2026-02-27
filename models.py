@@ -48,7 +48,7 @@ class CoreStats(BaseModel):
     goals_against: int = 0
     saves: int = 0
     assists: int = 0
-    score: int = 0
+    score: float = 0
     shooting_percentage: float = 0.0
 
 
@@ -125,7 +125,7 @@ class ScorelineRow(BaseModel):
     opp_goals: int
     games: int
     me: ScorelineRoleStats
-    teammates: ScorelineRoleStats
+    teammates: ScorelineRoleStats | None = None
     opponents: ScorelineRoleStats
 
 

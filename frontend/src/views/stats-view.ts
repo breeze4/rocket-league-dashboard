@@ -16,30 +16,30 @@ export class StatsView extends LitElement {
     }
 
     .card {
-      background: #2a2a4a;
-      border: 1px solid #444;
-      border-radius: 6px;
-      padding: 1rem;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 0.375rem;
+      padding: 1.5rem;
     }
 
     .card h3 {
       font-size: 0.95rem;
-      color: #64b5f6;
+      color: #3b82f6;
       margin-bottom: 0.75rem;
-      border-bottom: 1px solid #444;
-      padding-bottom: 0.4rem;
+      border-bottom: 1px solid #27272a;
+      padding-bottom: 0.5rem;
     }
 
     .card h3 .role {
       font-weight: 400;
-      color: #888;
+      color: #71717a;
       font-size: 0.8rem;
     }
 
     .stat-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 0.3rem 1rem;
+      gap: 0.25rem 1rem;
     }
 
     .stat-row {
@@ -47,21 +47,21 @@ export class StatsView extends LitElement {
       justify-content: space-between;
     }
 
-    .stat-label { color: #999; font-size: 0.8rem; }
-    .stat-value { color: #fff; font-weight: 600; font-size: 0.85rem; }
+    .stat-label { color: #a1a1aa; font-size: 0.8rem; }
+    .stat-value { color: #fafafa; font-weight: 600; font-size: 0.85rem; }
 
     .section-label {
       grid-column: 1 / -1;
-      color: #777;
+      color: #71717a;
       font-size: 0.75rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       margin-top: 0.5rem;
-      border-bottom: 1px solid #333;
-      padding-bottom: 0.2rem;
+      border-bottom: 1px solid #27272a;
+      padding-bottom: 0.25rem;
     }
 
-    .win-rate { color: #81c784; }
+    .win-rate { color: #4ade80; }
   `;
 
   @state() private _me: PlayerStats | null = null;

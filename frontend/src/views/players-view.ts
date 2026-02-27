@@ -22,7 +22,7 @@ export class PlayersView extends LitElement {
 
     section h2 {
       font-size: 1rem;
-      color: #aaa;
+      color: #a1a1aa;
       margin-bottom: 0.75rem;
     }
 
@@ -32,7 +32,7 @@ export class PlayersView extends LitElement {
     }
 
     tr.selected {
-      background: #3a3a6a;
+      background: #27272a;
     }
 
     .actions {
@@ -43,14 +43,14 @@ export class PlayersView extends LitElement {
 
     .actions button {
       font-size: 0.8rem;
-      padding: 0.2em 0.6em;
+      padding: 0.25rem 0.75rem;
     }
 
     .config-section {
-      background: #2a2a4a;
-      border: 1px solid #444;
-      border-radius: 6px;
-      padding: 1rem;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 0.375rem;
+      padding: 1.5rem;
     }
 
     .config-group {
@@ -59,20 +59,20 @@ export class PlayersView extends LitElement {
 
     .config-group h3 {
       font-size: 0.85rem;
-      color: #ccc;
-      margin-bottom: 0.4rem;
+      color: #fafafa;
+      margin-bottom: 0.5rem;
     }
 
     .tag-list {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.3rem;
+      gap: 0.25rem;
     }
 
     .tag {
-      background: #3a3a6a;
-      border: 1px solid #555;
-      border-radius: 3px;
+      background: #27272a;
+      border: 1px solid #3f3f46;
+      border-radius: 0.375rem;
       padding: 0.15em 0.5em;
       font-size: 0.8rem;
       display: flex;
@@ -82,13 +82,13 @@ export class PlayersView extends LitElement {
 
     .tag .remove {
       cursor: pointer;
-      color: #ef5350;
+      color: #ef4444;
       font-weight: bold;
     }
 
     .add-teammate {
       display: flex;
-      gap: 0.4rem;
+      gap: 0.5rem;
       margin-top: 0.75rem;
       align-items: center;
     }
@@ -98,9 +98,9 @@ export class PlayersView extends LitElement {
     }
 
     .msg { margin-top: 0.75rem; font-size: 0.85rem; }
-    .msg.ok { color: #81c784; }
-    .msg.err { color: #ef5350; }
-    .empty { color: #666; font-style: italic; }
+    .msg.ok { color: #4ade80; }
+    .msg.err { color: #ef4444; }
+    .empty { color: #52525b; font-style: italic; }
   `;
 
   @state() private _players: PlayerFrequency[] = [];
