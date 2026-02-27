@@ -56,7 +56,7 @@ The scoreline endpoint accepts an optional `team-size` query parameter (1, 2, or
 
 The Analysis tab has two sub-views, toggled via a secondary nav within the tab:
 
-**Per Scoreline** — The existing scoreline aggregation view. Groups replays by final score and averages positioning/speed stats per role.
+**Per Scoreline** — The existing scoreline aggregation view. Groups replays by final score and averages positioning/speed stats per role. Scoreline rows are clickable — clicking expands the row to show individual games with that exact scoreline inline, rendered with the same bar-chart format as the Per Game view. Multiple rows can be expanded simultaneously. Game data is fetched alongside scoreline data so expansion is instant. Sub-rows are sorted by date descending. Expansion state resets when filters or team size change.
 
 **Per Game** — Individual game stats shown chronologically (most recent first). Each row is a single replay with the same three bar-chart stats (% Behind Ball, Avg Speed, Avg Distance) broken down by Me/Tm/Op. Columns: Date, Score, plus the three stat bar columns. Sortable by date, score, or any stat column. Uses the same team-size filter.
 

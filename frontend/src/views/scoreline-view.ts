@@ -1,9 +1,9 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { getScorelineStats, type ScorelineRow } from '../lib/api.js';
+import { getScorelineStats, getGameAnalysis, type ScorelineRow, type GameAnalysisRow } from '../lib/api.js';
 import {
   analysisStyles, computeGlobalRanges, renderBarCell, sortHeader, sortBarHeader,
-  renderModeBar, renderFilterBar, rowClass, type SortKey, type SortDir,
+  renderModeBar, renderFilterBar, rowClass, formatDate, type SortKey, type SortDir,
 } from '../lib/analysis-shared.js';
 
 @customElement('scoreline-view')
@@ -12,9 +12,70 @@ export class ScorelineView extends LitElement {
     col.col-score { width: 98px; }
     col.col-games { width: 84px; }
     col.col-stat  { /* takes remaining space equally */ }
+
+    tbody tr.parent-row { cursor: pointer; }
+    tbody tr.parent-row:hover { background: rgba(255,255,255,0.03); }
+
+    .games-cell {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.3rem;
+    }
+
+    .chevron {
+      font-size: 0.7rem;
+      color: #71717a;
+      transition: transform 0.15s ease;
+    }
+
+    .chevron.open { transform: rotate(90deg); }
+
+    tr.sub-row {
+      background: rgba(0,0,0,0.15);
+    }
+
+    tr.sub-row td {
+      padding: 0.25rem 0.5rem;
+      border-bottom: 1px solid #1e1e21;
+    }
+
+    tr.sub-row td.date {
+      text-align: left;
+      font-size: 0.95rem;
+    }
+
+    tr.sub-row td.date a {
+      color: #71717a;
+      text-decoration: none;
+    }
+
+    tr.sub-row td.date a:hover {
+      color: #3b82f6;
+      text-decoration: underline;
+    }
+
+    tr.sub-row td.score {
+      font-weight: 600;
+      font-size: 1.05rem;
+      color: #a1a1aa;
+    }
+
+    tr.sub-row.win { border-left: 3px solid rgba(74,222,128,0.4); }
+    tr.sub-row.loss { border-left: 3px solid rgba(239,68,68,0.4); }
+    tr.sub-row.draw { border-left: 3px solid rgba(82,82,91,0.4); }
+
+    tr.sub-row .bar-group { height: 52px; }
+    tr.sub-row .bar { min-height: 22px; }
+    tr.sub-row .bar-val { font-size: 1.05rem; }
+    tr.sub-row .bar-lbl { font-size: 0.85rem; }
+
+    tr.parent-row.expanded td { border-bottom: none; }
+    tr.sub-row-last td { border-bottom: 2px solid #27272a; }
   `];
 
   @state() private _rows: ScorelineRow[] = [];
+  @state() private _games: GameAnalysisRow[] = [];
   @state() private _error = '';
   @state() private _loading = true;
   @state() private _sortKey: SortKey = 'score';
@@ -22,6 +83,7 @@ export class ScorelineView extends LitElement {
   @state() private _teamSize = 2;
   @state() private _excludeZeroZero = true;
   @state() private _excludeShort = true;
+  @state() private _expanded = new Set<string>();
 
   connectedCallback() {
     super.connectedCallback();
@@ -31,12 +93,19 @@ export class ScorelineView extends LitElement {
   private async _load() {
     this._loading = true;
     this._error = '';
+    this._expanded = new Set();
+    const params = {
+      teamSize: this._teamSize,
+      excludeZeroZero: this._excludeZeroZero,
+      minDuration: this._excludeShort ? 90 : 0,
+    };
     try {
-      this._rows = await getScorelineStats({
-        teamSize: this._teamSize,
-        excludeZeroZero: this._excludeZeroZero,
-        minDuration: this._excludeShort ? 90 : 0,
-      });
+      const [rows, games] = await Promise.all([
+        getScorelineStats(params),
+        getGameAnalysis(params),
+      ]);
+      this._rows = rows;
+      this._games = games;
     } catch (e) {
       this._error = String(e);
     }
@@ -47,6 +116,24 @@ export class ScorelineView extends LitElement {
     if (size === this._teamSize) return;
     this._teamSize = size;
     this._load();
+  }
+
+  private _toggleExpand(my: number, opp: number) {
+    const key = `${my}-${opp}`;
+    const next = new Set(this._expanded);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    this._expanded = next;
+  }
+
+  private _isExpanded(my: number, opp: number): boolean {
+    return this._expanded.has(`${my}-${opp}`);
+  }
+
+  private _gamesForScoreline(my: number, opp: number): GameAnalysisRow[] {
+    return this._games
+      .filter(g => g.my_goals === my && g.opp_goals === opp)
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   }
 
   private _toggleSort(key: SortKey) {
@@ -90,6 +177,10 @@ export class ScorelineView extends LitElement {
     return computeGlobalRanges(this._rows);
   }
 
+  private get _gameGlobalRanges() {
+    return computeGlobalRanges(this._games);
+  }
+
   render() {
     if (this._loading) return html`<p>Loading scoreline data...</p>`;
     const filterBar = renderFilterBar(
@@ -112,6 +203,7 @@ export class ScorelineView extends LitElement {
 
     const toggle = (key: SortKey) => this._toggleSort(key);
     const gr = this._globalRanges;
+    const ggr = this._gameGlobalRanges;
 
     return html`
       ${renderModeBar(this._teamSize, (s) => this._setTeamSize(s))}
@@ -134,15 +226,34 @@ export class ScorelineView extends LitElement {
           </tr>
         </thead>
         <tbody>
-          ${this._sortedRows.map(row => html`
-            <tr class="${rowClass(row.my_goals, row.opp_goals)}">
-              <td class="score">${row.my_goals}-${row.opp_goals}</td>
-              <td class="games">${row.games}</td>
-              ${renderBarCell(row, 'pbb', gr)}
-              ${renderBarCell(row, 'spd', gr)}
-              ${renderBarCell(row, 'dist', gr)}
-            </tr>
-          `)}
+          ${this._sortedRows.map(row => {
+            const expanded = this._isExpanded(row.my_goals, row.opp_goals);
+            const games = expanded ? this._gamesForScoreline(row.my_goals, row.opp_goals) : [];
+            return html`
+              <tr class="parent-row ${rowClass(row.my_goals, row.opp_goals)} ${expanded ? 'expanded' : ''}"
+                  @click=${() => this._toggleExpand(row.my_goals, row.opp_goals)}>
+                <td class="score">${row.my_goals}-${row.opp_goals}</td>
+                <td class="games">
+                  <div class="games-cell">
+                    <span>${row.games}</span>
+                    <span class="chevron ${expanded ? 'open' : ''}">&#9654;</span>
+                  </div>
+                </td>
+                ${renderBarCell(row, 'pbb', gr)}
+                ${renderBarCell(row, 'spd', gr)}
+                ${renderBarCell(row, 'dist', gr)}
+              </tr>
+              ${games.map((g, i) => html`
+                <tr class="sub-row ${rowClass(g.my_goals, g.opp_goals)} ${i === games.length - 1 ? 'sub-row-last' : ''}">
+                  <td class="date"><a href="https://ballchasing.com/replay/${g.id}" target="_blank" rel="noopener">${formatDate(g.date)}</a></td>
+                  <td class="score">${g.my_goals}-${g.opp_goals}</td>
+                  ${renderBarCell(g, 'pbb', ggr)}
+                  ${renderBarCell(g, 'spd', ggr)}
+                  ${renderBarCell(g, 'dist', ggr)}
+                </tr>
+              `)}
+            `;
+          })}
         </tbody>
       </table>
     `;

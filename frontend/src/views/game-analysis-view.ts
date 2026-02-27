@@ -3,7 +3,7 @@ import { customElement, state } from 'lit/decorators.js';
 import { getGameAnalysis, type GameAnalysisRow } from '../lib/api.js';
 import {
   analysisStyles, computeGlobalRanges, renderBarCell, sortHeader, sortBarHeader,
-  renderModeBar, renderFilterBar, rowClass, type SortKey, type SortDir,
+  renderModeBar, renderFilterBar, rowClass, formatDate, type SortKey, type SortDir,
 } from '../lib/analysis-shared.js';
 
 @customElement('game-analysis-view')
@@ -99,12 +99,6 @@ export class GameAnalysisView extends LitElement {
     return computeGlobalRanges(this._rows);
   }
 
-  private _formatDate(iso: string): string {
-    if (!iso) return '-';
-    const d = new Date(iso);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-      + ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  }
 
   render() {
     if (this._loading) return html`<p>Loading game data...</p>`;
@@ -152,7 +146,7 @@ export class GameAnalysisView extends LitElement {
         <tbody>
           ${this._sortedRows.map(row => html`
             <tr class="${rowClass(row.my_goals, row.opp_goals)}">
-              <td class="date left">${this._formatDate(row.date)}</td>
+              <td class="date left">${formatDate(row.date)}</td>
               <td class="score">${row.my_goals}-${row.opp_goals}</td>
               ${renderBarCell(row, 'pbb', gr)}
               ${renderBarCell(row, 'spd', gr)}

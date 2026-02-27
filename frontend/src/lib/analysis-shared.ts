@@ -364,3 +364,11 @@ export function rowClass(myGoals: number, oppGoals: number): string {
   if (myGoals < oppGoals) return 'loss';
   return 'draw';
 }
+
+/** Format ISO date string for display */
+export function formatDate(iso: string): string {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    + ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
